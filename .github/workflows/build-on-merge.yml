@@ -34,7 +34,7 @@ jobs:
 
       # Step 4: Run tests
       - name: Copy .env.test to the correct location
-        run: cp .env.test /home/runner/work/mailculator-processor/mailculator/.env
+        run: cp .env.test /home/runner/work/mailculator-processor/mailculator-processor/.env
 
       - name: Run tests
         run: |

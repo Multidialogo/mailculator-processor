@@ -11,7 +11,7 @@ target_dir="$script_dir/dummies"
 mkdir -p "$target_dir"
 
 # Loop to copy the file 100 times with different random directories and names
-for i in {1..100}
+for i in {1..20}
 do
   # Generate a random directory under dummies
   random_dir="$target_dir/$(cat /proc/sys/kernel/random/uuid)"

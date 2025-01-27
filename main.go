@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sort"
 	"time"
+	"strings"
 
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service"
@@ -24,7 +25,7 @@ func main() {
 
 	// Get the current time and define the threshold (1 minute ago)
 	currentTime := time.Now()
-	threshold := currentTime.Add(-1 * time.Minute)
+	threshold := currentTime.Add(-30 * time.Second)
 	sleepTime := time.Duration(6)
 
 	// Get list of files to process
@@ -49,17 +50,17 @@ func main() {
 			var destPath string
 			if err != nil {
 				log.Printf("CRITICAL: Error processing originPath %s: %v\n", originPath, err)
-				destPath = failurePath
+				destPath = strings.Replace(originPath, outboxPath, failurePath, 1)
 			} else {
 				log.Printf("INFO: Successfully processed originPath: %s\n", originPath)
-				destPath = sentPath
+				destPath = strings.Replace(originPath, outboxPath, sentPath, 1)
 			}
 
 			err = utils.MoveFile(originPath, destPath)
 			if err != nil {
-				log.Printf("CRITICAL: Failed to move originPath %s to %s: %v\n", originPath, destPath, err)
+				log.Printf("CRITICAL: Failed to move file from %s to %s: %v\n", originPath, destPath, err)
 			} else {
-				log.Printf("INFO: File moved to processed originPath: %s\n", destPath)
+				log.Printf("INFO: File moved from %s to %s\n", originPath, destPath)
 			}
 		}(file) // Pass the file to the goroutine
 	}

@@ -52,6 +52,18 @@ To run the development container:
 docker run --rm -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
 ```
 
+If you want to generate some dummy data:
+
+```bash
+./data/maildir/outbox/dummy-gen.sh
+```
+
+Cleanup directories
+
+```bash
+rm -rf ./data/maildir/failure && rm -rf ./data/maildir/sent && rm -rf ./data/maildir/outbox/dummies/*
+```
+
 ### Stage 3: Production
 
 Purpose: This stage is optimized for production deployment. It creates a minimal container to run the mailculator processor binary in a secure and efficient environment.

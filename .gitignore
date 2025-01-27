@@ -1,3 +1,4 @@
 .env.prod
 data/maildir/sent
 data/maildir/failure
+data/maildir/outbox/dummies

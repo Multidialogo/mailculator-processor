@@ -1,39 +1,72 @@
 package main
 
 import (
-	"os"
 	"log"
 	"path/filepath"
 	"sync"
-	"sort"
 	"time"
 	"strings"
+	"strconv"
+	"fmt"
 
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
 )
 
-func main() {
+var outboxBasePath string
+var sentBasePath string
+var failureBasePath string
+var sleepTime time.Duration
+var lastModTime time.Duration
+var considerEmptyAfterTime time.Duration
+
+func init() {
 	// Retrieve paths from the configuration
 	registry := config.GetRegistry()
 	basePath := registry.Get("APP_DATA_PATH")
-	outboxBasePath := filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
-	sentBasePath := filepath.Join(basePath, registry.Get("SENT_PATH"))
-	failureBasePath := filepath.Join(basePath, registry.Get("FAILURE_PATH"))
-	sleepTime := 6 * time.Second
+	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
+	sentBasePath = filepath.Join(basePath, registry.Get("SENT_PATH"))
+	failureBasePath = filepath.Join(basePath, registry.Get("FAILURE_PATH"))
 
-	log.Printf("DEBUG: config -> outbox: %s, sent: %s, failure: %s, sleep time: %ds", outboxBasePath, sentBasePath, failureBasePath, (sleepTime / time.Second))
+	// Convert the string values to integers
+	checkInterval, err := strconv.Atoi(registry.Get("CHECK_INTERVAL"))
+	if err != nil {
+		panic(fmt.Sprintf("Error converting CHECK_INTERVAL: %v", err))
+	}
+
+	lastModInterval, err := strconv.Atoi(registry.Get("LAST_MOD_INTERVAL"))
+	if err != nil {
+		panic(fmt.Sprintf("Error converting LAST_MOD_INTERVAL: %v", err))
+	}
+
+	considerEmptyAfterInterval, err := strconv.Atoi(registry.Get("EMPTY_DIR_INTERVAL"))
+	if err != nil {
+		panic(fmt.Sprintf("Error converting EMPTY_DIR_INTERVAL: %v", err))
+	}
+
+	// Convert to time.Duration
+	sleepTime = time.Duration(checkInterval) * time.Second
+	lastModTime = -time.Duration(lastModInterval) * time.Second
+	considerEmptyAfterTime = -time.Duration(considerEmptyAfterInterval) * time.Second
+}
+
+func main() {
+	log.Printf(
+		"\033[36mDEBUG: config -> outbox: %s, sent: %s, failure: %s, sleep time: %d s, old file: %d s, old directory: %d s\033[0m",
+		outboxBasePath, sentBasePath, failureBasePath, int(sleepTime.Seconds()), int(lastModTime.Seconds()), int(considerEmptyAfterTime.Seconds()),
+	)
 
 	// Main loop to process files periodically
 	for {
 		// Get the current time and define the lastModTimeThreshold (15 seconds ago)
 		currentTime := time.Now()
-		lastModTimeThreshold := currentTime.Add(-15 * time.Second)
-		log.Printf("INFO: Listing files in: %s\n", outboxBasePath)
+		lastModTimeThreshold := currentTime.Add(lastModTime)
+		considerEmptyAfterTimeThreshold := currentTime.Add(considerEmptyAfterTime)
+		log.Printf("\033[34mINFO: Listing files in: %s, older than %ds\033[0m", outboxBasePath, int(lastModTime.Seconds()))
 
 		// Get list of files to process
-		files, err := listFiles(outboxBasePath, lastModTimeThreshold)
+		files, err := utils.ListFiles(outboxBasePath, lastModTimeThreshold)
 		if err != nil {
 			log.Fatalf("Error listing files: %v", err)
 		}
@@ -49,74 +82,38 @@ func main() {
 
 				outboxRelativePath := strings.Replace(outboxFilePath, outboxBasePath, "", 1)
 
-				log.Printf("INFO: Processing: %s\n", outboxRelativePath)
+				log.Printf("\033[34mINFO: Processing: %s\033[0m", outboxRelativePath)
 
 				// Call the service.SendEMLFile function for each outboxFilePath
 				err := service.SendEMLFile(outboxFilePath)
 				var destPath string
 				if err != nil {
-					log.Printf("CRITICAL: Error processing outboxFilePath %s: %v\n", outboxFilePath, err)
+					log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
 					destPath = filepath.Join(failureBasePath, outboxRelativePath)
 				} else {
-					log.Printf("INFO: Successfully processed outboxFilePath: %s\n", outboxFilePath)
+					log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s\033[0m", outboxFilePath)
 					destPath = filepath.Join(sentBasePath, outboxRelativePath)
 				}
 
-				log.Printf("INFO: Moving file from %s to %s\n", outboxFilePath, destPath)
+				log.Printf("\033[34mINFO: Moving file from %s to %s\033[0m", outboxFilePath, destPath)
 				err = utils.MoveFile(outboxFilePath, destPath)
 				if err != nil {
-					log.Printf("CRITICAL: Failed to move file from %s to %s: %v\n", outboxFilePath, destPath, err)
+					log.Printf("\033[31mCRITICAL: Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err)
 				}
 			}(file) // Pass the file to the goroutine
 		}
 
 		wg.Wait() // Wait for all goroutines to finish
 
+		// Cleaning up orphans directories from outbox
+		log.Printf("\033[34mINFO: Cleanup outbox %s, older than %ds\033[0m", outboxBasePath, int(considerEmptyAfterTime.Seconds()))
+		err = utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
+		if err != nil {
+			log.Printf("\033[31mCRITICAL: Failed to cleanup outbox: %v\033[0m", err)
+		}
+
 		// Sleep for a defined time before processing again
-		log.Printf("INFO: Sleeping for %v before recalling the process.\n", sleepTime)
+		log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
 		time.Sleep(sleepTime)
 	}
-}
-
-// listFiles returns a sorted slice of file paths that were last modified more than the threshold.
-func listFiles(dir string, threshold time.Time) ([]string, error) {
-	var files []string
-
-	// Walk through the directory
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories and process only .EML files
-		if info.IsDir() || filepath.Ext(path) != ".EML" {
-			return nil
-		}
-
-		// Check if the last modified time is more than the threshold
-		if info.ModTime().Before(threshold) {
-			files = append(files, path)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Sort files by modification time (oldest first)
-	sort.Slice(files, func(i, j int) bool {
-		// Use the file's modification time directly
-		fileInfoI, errI := os.Stat(files[i])
-		fileInfoJ, errJ := os.Stat(files[j])
-
-		if errI != nil || errJ != nil {
-			// Log the error and continue sorting
-			log.Printf("Error getting file info for sorting: %v %v", errI, errJ)
-			return false
-		}
-		return fileInfoI.ModTime().Before(fileInfoJ.ModTime())
-	})
-
-	return files, nil
 }

@@ -2,8 +2,8 @@ package utils
 
 import (
 	"os"
-	"testing"
 	"path/filepath"
+	"testing"
 )
 
 // TestMoveFile tests the MoveFile function
@@ -33,6 +33,11 @@ func TestMoveFile(t *testing.T) {
 		t.Errorf("Destination file does not exist: %v", destPath)
 	}
 
+	// Ensure the source file is deleted
+	if _, err := os.Stat(sourceFile); !os.IsNotExist(err) {
+		t.Errorf("Source file still exists: %v", sourceFile)
+	}
+
 	// Test moving a non-existing file
 	err = MoveFile("nonexistent.txt", destinationDir)
 	if err == nil {
@@ -47,7 +52,7 @@ func TestMoveFileCreateDir(t *testing.T) {
 
 	// Test data
 	sourceFile := filepath.Join(tmpDir, "source.txt")
-	destinationDir := filepath.Join(tmpDir, "newdir", "destination")
+	destinationDir := filepath.Join(tmpDir, "newdir")
 
 	// Create a file in the source directory
 	err := os.WriteFile(sourceFile, []byte("Test file content"), 0644)
@@ -65,5 +70,10 @@ func TestMoveFileCreateDir(t *testing.T) {
 	destPath := filepath.Join(destinationDir, "source.txt")
 	if _, err := os.Stat(destPath); os.IsNotExist(err) {
 		t.Errorf("Destination file does not exist: %v", destPath)
+	}
+
+	// Ensure the source file is deleted
+	if _, err := os.Stat(sourceFile); !os.IsNotExist(err) {
+		t.Errorf("Source file still exists: %v", sourceFile)
 	}
 }

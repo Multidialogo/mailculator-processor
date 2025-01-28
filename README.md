@@ -46,22 +46,14 @@ To build the image:
 docker build --no-cache -t mailculatorp-dev --target mailculatorp-dev .
 ```
 
-
 To run the development container:
 ```bash
 docker run --rm -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
 ```
 
 If you want to generate some dummy data:
-
 ```bash
-./data/maildir/outbox/dummy-gen.sh
-```
-
-Cleanup directories
-
-```bash
-rm -rf ./data/maildir/failure && rm -rf ./data/maildir/sent && rm -rf ./data/maildir/outbox/dummies/*
+./data/maildir/dummy-gen.sh
 ```
 
 ### Stage 3: Production

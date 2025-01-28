@@ -46,6 +46,10 @@ To build the image:
 docker build --no-cache -t mailculatorp-dev --target mailculatorp-dev .
 ```
 
+If you want to generate some dummy data:
+```bash
+sudo chown -R "$(whoami):$(id -gn)" ./data && ./data/maildir/dummy-gen.sh
+```
 
 To run the development container:
 ```bash

@@ -3,9 +3,6 @@
 # Get the directory where the script is located
 script_dir="$(dirname "$(realpath "$0")")"
 
-# Ensure ownership of the script directory
-chown -R "$(whoami):$(id -gn)" "${script_dir}"
-
 # Define source file and target directory relative to the script's directory
 source_file="${script_dir}/sample.EML.dist"
 target_dir="${script_dir}/outbox"

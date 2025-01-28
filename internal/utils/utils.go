@@ -11,6 +11,9 @@ func MoveFile(originPath string, destDir string) error {
 		return fmt.Errorf("Missing origin file: %s", originPath)
 	}
 
+	// Clean the destination directory path
+	destDir = filepath.Clean(destDir)
+
 	// Create destination directory if it doesn't exist
 	err := os.MkdirAll(destDir, os.ModePerm)
 	if err != nil {

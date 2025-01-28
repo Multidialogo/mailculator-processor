@@ -14,25 +14,29 @@ rm -rf "${script_dir}/sent"
 rm -rf "${script_dir}/outbox/users"
 
 # Loop to copy the file 20 times with the required folder structure
-for i in {1..20}
+for i in {1..5}
 do
   # Generate random UUIDs for the folder structure
   user_uuid=$(cat /proc/sys/kernel/random/uuid)
   queue_uuid=$(cat /proc/sys/kernel/random/uuid)
-  message_uuid=$(cat /proc/sys/kernel/random/uuid)
 
-  # Create the directory structure
-  message_dir="${target_dir}/users/${user_uuid}/queues/${queue_uuid}/messages"
-  mkdir -p "$message_dir"
+  for i in {1..5}
+  do
+    message_uuid=$(cat /proc/sys/kernel/random/uuid)
 
-  # Define the full path of the new file
-  new_file="${message_dir}/${message_uuid}.EML"
+    # Create the directory structure
+    message_dir="${target_dir}/users/${user_uuid}/queues/${queue_uuid}/messages"
+    mkdir -p "$message_dir"
 
-  # Copy the file to the new location
-  cp "$source_file" "$new_file"
+    # Define the full path of the new file
+    new_file="${message_dir}/${message_uuid}.EML"
 
-  # Optionally print the copy path
-  echo "Copied to: $new_file"
+    # Copy the file to the new location
+    cp "$source_file" "$new_file"
+
+    # Optionally print the copy path
+    echo "Copied to: $new_file"
+  done
 done
 
 echo "File generation complete."

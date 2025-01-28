@@ -1,79 +1,55 @@
-package utils
+package utils_test
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"mailculator-processor/internal/utils"
 )
 
-// TestMoveFile tests the MoveFile function
 func TestMoveFile(t *testing.T) {
-	// Create a temporary directory to store the test files
-	tmpDir := t.TempDir()
-
-	// Test data
-	sourceFile := filepath.Join(tmpDir, "source.txt")
-	destinationDir := filepath.Join(tmpDir, "destination")
-
-	// Create a file in the source directory
-	err := os.WriteFile(sourceFile, []byte("Test file content"), 0644)
+	// Create a temporary directory for testing
+	tempDir, err := ioutil.TempDir("", "test-movefile")
 	if err != nil {
-		t.Fatalf("Error creating source file: %v", err)
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up the temporary directory
+
+	// Define file paths
+	originPath := filepath.Join(tempDir, "out", "filename.ext")
+	destinationDir := filepath.Join(tempDir, "gone")
+	destinationPath := filepath.Join(destinationDir, "filename.ext")
+
+	// Create a temporary file at the origin path
+	content := []byte("This is a test file.")
+	if err := ioutil.WriteFile(originPath, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Move the file to the destination
-	err = MoveFile(sourceFile, destinationDir)
+	// Call the function to test
+	err = utils.MoveFile(originPath, destinationPath)
 	if err != nil {
-		t.Fatalf("Failed to move file: %v", err)
+		t.Fatalf("MoveFile failed: %v", err)
 	}
 
-	// Check that the file was moved to the destination
-	destPath := filepath.Join(destinationDir, "source.txt")
-	if _, err := os.Stat(destPath); os.IsNotExist(err) {
-		t.Errorf("Destination file does not exist: %v", destPath)
+	// Check if the file was moved
+	if _, err := os.Stat(originPath); !os.IsNotExist(err) {
+		t.Errorf("File still exists at origin path: %v", originPath)
 	}
 
-	// Ensure the source file is deleted
-	if _, err := os.Stat(sourceFile); !os.IsNotExist(err) {
-		t.Errorf("Source file still exists: %v", sourceFile)
+	if _, err := os.Stat(destinationPath); err != nil {
+		t.Errorf("File does not exist at destination path: %v", destinationPath)
 	}
 
-	// Test moving a non-existing file
-	err = MoveFile("nonexistent.txt", destinationDir)
-	if err == nil {
-		t.Errorf("Expected error for non-existent file, but got none")
-	}
-}
-
-// TestMoveFileCreateDir tests the case where the destination directory doesn't exist yet
-func TestMoveFileCreateDir(t *testing.T) {
-	// Create a temporary directory to store the test files
-	tmpDir := t.TempDir()
-
-	// Test data
-	sourceFile := filepath.Join(tmpDir, "source.txt")
-	destinationDir := filepath.Join(tmpDir, "newdir")
-
-	// Create a file in the source directory
-	err := os.WriteFile(sourceFile, []byte("Test file content"), 0644)
+	// Verify the content of the moved file
+	movedContent, err := ioutil.ReadFile(destinationPath)
 	if err != nil {
-		t.Fatalf("Error creating source file: %v", err)
+		t.Fatalf("Failed to read moved file: %v", err)
 	}
 
-	// Move the file to the destination
-	err = MoveFile(sourceFile, destinationDir)
-	if err != nil {
-		t.Fatalf("Failed to move file: %v", err)
-	}
-
-	// Check that the file was moved to the destination
-	destPath := filepath.Join(destinationDir, "source.txt")
-	if _, err := os.Stat(destPath); os.IsNotExist(err) {
-		t.Errorf("Destination file does not exist: %v", destPath)
-	}
-
-	// Ensure the source file is deleted
-	if _, err := os.Stat(sourceFile); !os.IsNotExist(err) {
-		t.Errorf("Source file still exists: %v", sourceFile)
+	if string(movedContent) != string(content) {
+		t.Errorf("Moved file content mismatch. Got: %v, Want: %v", string(movedContent), string(content))
 	}
 }

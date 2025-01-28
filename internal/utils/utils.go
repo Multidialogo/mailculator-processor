@@ -1,33 +1,25 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 )
 
-func MoveFile(originPath string, destDir string) error {
-	if _, err := os.Stat(originPath); os.IsNotExist(err) {
-		return fmt.Errorf("Missing origin file: %s", originPath)
+// MoveFile ensures the destination directory exists and moves the file
+func MoveFile(originPath string, destinationPath string) error {
+	// Get the parent directory of the destination path
+	destinationDir := filepath.Dir(destinationPath)
+
+	// Ensure the destination directory exists
+	err := os.MkdirAll(destinationDir, os.ModePerm)
+	if err != nil {
+		return err
 	}
 
-	// Clean the destination directory path
-	destDir = filepath.Clean(destDir)
-
-	// Create destination directory if it doesn't exist
-	err := os.MkdirAll(destDir, os.ModePerm)
+	// Move (or rename) the file
+	err = os.Rename(originPath, destinationPath)
 	if err != nil {
-		return fmt.Errorf("Cannot create destination directory: %v", err)
-	}
-
-	// Extract the file name from the origin path
-	fileName := filepath.Base(originPath)
-	destPath := filepath.Join(destDir, fileName)
-
-	// Move the file to the destination path
-	err = os.Rename(originPath, destPath)
-	if err != nil {
-		return fmt.Errorf("Cannot move the file: %v", err)
+		return err
 	}
 
 	return nil

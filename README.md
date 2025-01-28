@@ -53,7 +53,7 @@ docker run --rm -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
 
 If you want to generate some dummy data:
 ```bash
-./data/maildir/dummy-gen.sh
+sudo ./data/maildir/dummy-gen.sh
 ```
 
 ### Stage 3: Production

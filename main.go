@@ -20,6 +20,7 @@ var failureBasePath string
 var sleepTime time.Duration
 var lastModTime time.Duration
 var considerEmptyAfterTime time.Duration
+var rawEmailClient service.RawEmailClient
 
 func init() {
 	// Retrieve paths from the configuration
@@ -49,6 +50,8 @@ func init() {
 	sleepTime = time.Duration(checkInterval) * time.Second
 	lastModTime = -time.Duration(lastModInterval) * time.Second
 	considerEmptyAfterTime = -time.Duration(considerEmptyAfterInterval) * time.Second
+
+	rawEmailClient = getEmailClient(registry.Get("ENV"))
 }
 
 func main() {
@@ -85,13 +88,13 @@ func main() {
 				log.Printf("\033[34mINFO: Processing: %s\033[0m", outboxRelativePath)
 
 				// Call the service.SendEMLFile function for each outboxFilePath
-				err := service.SendEMLFile(outboxFilePath)
+				err, result := service.SendRawEmail(outboxFilePath, rawEmailClient)
 				var destPath string
 				if err != nil {
 					log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
 					destPath = filepath.Join(failureBasePath, outboxRelativePath)
 				} else {
-					log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s\033[0m", outboxFilePath)
+					log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s, result: %v\033[0m", outboxFilePath, result)
 					destPath = filepath.Join(sentBasePath, outboxRelativePath)
 				}
 
@@ -116,4 +119,19 @@ func main() {
 		log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
 		time.Sleep(sleepTime)
 	}
+}
+
+// getEmailClient returns the appropriate RawEmailClient based on the environment
+func getEmailClient(env string) service.RawEmailClient {
+	if env == "TEST" || env == "DEV" {
+		// Return a fake client for testing or development
+		return &service.FakeEmailClient{}
+	}
+
+	// Otherwise, return the real SES client for production
+	sesClient, err := service.NewSESClient()
+	if err != nil {
+		log.Fatalf("Failed to create SES client: %v", err)
+	}
+	return sesClient
 }

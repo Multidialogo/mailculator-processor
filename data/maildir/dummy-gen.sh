@@ -4,7 +4,7 @@
 script_dir="$(dirname "$(realpath "$0")")"
 
 # Define source file and target directory relative to the script's directory
-source_file="${script_dir}/sample.EML.dist"
+source_file="${script_dir}/sample_N_.EML.dist"
 target_dir="${script_dir}/outbox"
 
 # Cleanup directories
@@ -28,14 +28,15 @@ do
     message_dir="${target_dir}/users/${user_uuid}/queues/${queue_uuid}/messages"
     mkdir -p "$message_dir"
 
+   # Read the source file and replace _N_ with a random number (1, 2, or 3)
+    random_num=$((RANDOM % 3 + 1))
+    template_file="${source_file//_N_/${random_num}}"
+
     # Define the full path of the new file
     new_file="${message_dir}/${message_uuid}.EML"
 
-    # Copy the file to the new location
-    cp "$source_file" "$new_file"
-
-    # Optionally print the copy path
-    echo "Copied to: $new_file"
+    # Write the modified content to the new file
+    cp "${template_file}" "${new_file}"
   done
 done
 

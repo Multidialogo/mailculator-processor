@@ -1,5 +1,4 @@
 .env.prod
-data/maildir/sent
-data/maildir/failure
+data/maildir/users/*
 data/maildir/outbox/*
 !data/maildir/outbox/.gitkeep

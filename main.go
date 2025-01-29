@@ -14,9 +14,8 @@ import (
 	"mailculator-processor/internal/utils"
 )
 
+var basePath string
 var outboxBasePath string
-var sentBasePath string
-var failureBasePath string
 var sleepTime time.Duration
 var lastModTime time.Duration
 var considerEmptyAfterTime time.Duration
@@ -25,10 +24,8 @@ var rawEmailClient service.RawEmailClient
 func init() {
 	// Retrieve paths from the configuration
 	registry := config.GetRegistry()
-	basePath := registry.Get("APP_DATA_PATH")
+	basePath = registry.Get("APP_DATA_PATH")
 	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
-	sentBasePath = filepath.Join(basePath, registry.Get("SENT_PATH"))
-	failureBasePath = filepath.Join(basePath, registry.Get("FAILURE_PATH"))
 
 	// Convert the string values to integers
 	checkInterval, err := strconv.Atoi(registry.Get("CHECK_INTERVAL"))
@@ -56,8 +53,8 @@ func init() {
 
 func main() {
 	log.Printf(
-		"\033[36mDEBUG: config -> outbox: %s, sent: %s, failure: %s, sleep time: %d s, old file: %d s, old directory: %d s\033[0m",
-		outboxBasePath, sentBasePath, failureBasePath, int(sleepTime.Seconds()), int(lastModTime.Seconds()), int(considerEmptyAfterTime.Seconds()),
+		"\033[36mDEBUG: config -> outbox: %s, sleep time: %d s, old file: %d s, old directory: %d s\033[0m",
+		outboxBasePath, int(sleepTime.Seconds()), int(lastModTime.Seconds()), int(considerEmptyAfterTime.Seconds()),
 	)
 
 	// Main loop to process files periodically
@@ -89,13 +86,13 @@ func main() {
 
 				// Call the service.SendEMLFile function for each outboxFilePath
 				err, result := service.SendRawEmail(outboxFilePath, rawEmailClient)
-				var destPath string
+				var destPath string = filepath.Join(basePath, strings.Replace(outboxRelativePath, "/outbox", "", -1))
 				if err != nil {
 					log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
-					destPath = filepath.Join(failureBasePath, outboxRelativePath)
+					destPath = strings.Replace(destPath, "/queues", "/failure/queues", -1)
 				} else {
 					log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s, result: %v\033[0m", outboxFilePath, result)
-					destPath = filepath.Join(sentBasePath, outboxRelativePath)
+					destPath = strings.Replace(destPath, "/queues", "/sent/queues", -1)
 				}
 
 				log.Printf("\033[34mINFO: Moving file from %s to %s\033[0m", outboxFilePath, destPath)

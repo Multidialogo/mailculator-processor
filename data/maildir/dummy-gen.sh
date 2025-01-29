@@ -9,15 +9,13 @@ target_dir="${script_dir}/outbox"
 
 # Cleanup directories
 echo "Cleaning up directories..."
-rm -rf "${script_dir}/failure"
-rm -rf "${script_dir}/sent"
-rm -rf "${script_dir}/outbox/users"
+rm -rf "${target_dir}/users"
+rm -rf "${script_dir}/users"
 
 # Loop to copy the file 20 times with the required folder structure
-for i in {1..5}
+for uid in {1..100}
 do
   # Generate random UUIDs for the folder structure
-  user_uuid=$(cat /proc/sys/kernel/random/uuid)
   queue_uuid=$(cat /proc/sys/kernel/random/uuid)
 
   for i in {1..5}
@@ -25,7 +23,7 @@ do
     message_uuid=$(cat /proc/sys/kernel/random/uuid)
 
     # Create the directory structure
-    message_dir="${target_dir}/users/${user_uuid}/queues/${queue_uuid}/messages"
+    message_dir="${target_dir}/users/user${uid}/queues/${queue_uuid}/messages"
     mkdir -p "$message_dir"
 
    # Read the source file and replace _N_ with a random number (1, 2, or 3)

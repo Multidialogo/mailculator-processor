@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"log"
 	"path/filepath"
 	"sync"
@@ -26,6 +27,13 @@ func init() {
 	registry := config.GetRegistry()
 	basePath = registry.Get("APP_DATA_PATH")
 	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
+
+	if _, err := os.Stat(outboxBasePath); os.IsNotExist(err) {
+		err = os.MkdirAll(outboxBasePath, os.ModePerm)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create directory: %v", err))
+		}
+	}
 
 	// Convert the string values to integers
 	checkInterval, err := strconv.Atoi(registry.Get("CHECK_INTERVAL"))

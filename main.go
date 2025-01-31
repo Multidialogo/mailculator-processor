@@ -13,6 +13,8 @@ import (
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
 var basePath string
@@ -67,6 +69,8 @@ func main() {
 
 	// Main loop to process files periodically
 	for {
+		// Record memory and CPU usage at the start
+		printStats()
 		startTime := time.Now()
 
 		// Get the current time and define the lastModTimeThreshold (15 seconds ago)
@@ -126,6 +130,8 @@ func main() {
 		}
 
 		log.Printf("\u001B[36mDEBUG: Elapsed time with cleanup: %.2f seconds\n\033[0m", time.Since(startTime).Seconds())
+		// Record memory and CPU usage at the end
+		printStats()
 
 		// Sleep for a defined time before processing again
 		log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
@@ -147,4 +153,25 @@ func getEmailClient(env string) service.RawEmailClient {
 		log.Fatalf("Failed to create SES client: %v", err)
 	}
 	return sesClient
+}
+
+// printStats logs the memory and CPU stats
+func printStats() {
+	// Memory stats using gopsutil/mem
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		log.Printf("\033[31mCRITICAL: Error fetching memory usage: %v\033[0m", err)
+	}
+
+	// CPU stats
+	cpus, err := cpu.Percent(0, false)
+	if err != nil {
+		log.Printf("\033[31mCRITICAL: Error fetching CPU usage: %v\033[0m", err)
+	}
+
+	log.Printf(
+		"\u001B[33mDEBUG: MEMORY: Total = %v MiB, Used = %v MiB, Free = %v MiB, Percent = %v%%\033[0m",
+		v.Total/1024/1024, v.Used/1024/1024, v.Free/1024/1024, v.UsedPercent,
+	)
+	log.Printf("\u001B[33mDEBUG: CPU: Peak Usage = %v%%\033[0m", cpus[0])
 }

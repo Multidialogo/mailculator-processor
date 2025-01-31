@@ -4,12 +4,23 @@ import (
 	"crypto/md5"
 	"fmt"
 	"math/big"
+	"time"
 )
 
 // FakeEmailClient is a simple fake implementation of RawEmailClient
 type FakeEmailClient struct{}
 
 func (f *FakeEmailClient) SendRawEmail(input *RawEmailInput) (*RawEmailOutput, error) {
+	// Calculate the size of the email in megabytes
+	emailSizeMB := float64(len(input.Data)) / (1024 * 1024)
+
+	// Sleep duration based on the size of the email (1 to 2 seconds per MB)
+	// Adjust the multiplier to simulate a specific rate
+	sleepDuration := time.Second * time.Duration(emailSizeMB) // sleep 1 second per MB
+
+	// Sleep for the calculated duration
+	time.Sleep(sleepDuration)
+
 	// Hash the raw input data using MD5
 	hash := md5.New()
 	hash.Write(input.Data)

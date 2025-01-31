@@ -93,46 +93,53 @@ func RemoveEmptyDirs(dir string, threshold time.Time) error {
 func findEmptyDirs(dir string, threshold time.Time) ([]string, error) {
 	var emptyDirs []string
 
-	entries, err := os.ReadDir(dir)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Saltiamo il root directory
+		if path == dir {
+			return nil
+		}
+
+		if info.IsDir() {
+			// Legge il contenuto della directory
+			subEntries, err := os.ReadDir(path)
+			if err != nil {
+				return nil
+			}
+
+			// Se la directory è stata modificata di recente, ignoriamola
+			if info.ModTime().After(threshold) {
+				return nil
+			}
+
+			// Verifica se contiene file .EML
+			isEmpty := true
+			for _, subEntry := range subEntries {
+				if !subEntry.IsDir() && filepath.Ext(subEntry.Name()) == ".EML" {
+					isEmpty = false
+					break
+				}
+			}
+
+			// Se è vuota e vecchia, aggiungiamola alla lista
+			if isEmpty {
+				emptyDirs = append(emptyDirs, path)
+			}
+		}
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		path := filepath.Join(dir, entry.Name())
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		// Directory has not been modified since threshold
-		if info.ModTime().After(threshold) {
-			continue
-		}
-
-		subEntries, err := os.ReadDir(path)
-		if err != nil {
-			continue
-		}
-
-		// Skipped if .EML files contained
-		isEmpty := true
-		for _, subEntry := range subEntries {
-			if !subEntry.IsDir() && filepath.Ext(subEntry.Name()) == ".EML" {
-				isEmpty = false
-				break
-			}
-		}
-
-		// Mark for removal
-		if isEmpty {
-			emptyDirs = append(emptyDirs, path)
-		}
-	}
+	// Ordinare per lunghezza decrescente (le foglie prima dei genitori)
+	sort.Slice(emptyDirs, func(i, j int) bool {
+		return len(emptyDirs[i]) > len(emptyDirs[j])
+	})
 
 	return emptyDirs, nil
 }

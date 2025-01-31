@@ -67,6 +67,8 @@ func main() {
 
 	// Main loop to process files periodically
 	for {
+		startTime := time.Now()
+
 		// Get the current time and define the lastModTimeThreshold (15 seconds ago)
 		currentTime := time.Now()
 		lastModTimeThreshold := currentTime.Add(lastModTime)
@@ -78,6 +80,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error listing files: %v", err)
 		}
+		log.Printf("\033[34mINFO: Found: %d message files to process\033[0m", len(files))
 
 		// Process each file by calling SendEMLFile in parallel
 		var wg sync.WaitGroup
@@ -113,6 +116,8 @@ func main() {
 
 		wg.Wait() // Wait for all goroutines to finish
 
+		log.Printf("\u001B[36mDEBUG: Elapsed time: %.2f seconds\n\033[0m", time.Since(startTime).Seconds())
+
 		// Cleaning up orphans directories from outbox
 		log.Printf("\033[34mINFO: Cleanup outbox %s, older than %ds\033[0m", outboxBasePath, int(considerEmptyAfterTime.Seconds()))
 		err = utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
@@ -120,10 +125,13 @@ func main() {
 			log.Printf("\033[31mCRITICAL: Failed to cleanup outbox: %v\033[0m", err)
 		}
 
+		log.Printf("\u001B[36mDEBUG: Elapsed time with cleanup: %.2f seconds\n\033[0m", time.Since(startTime).Seconds())
+
 		// Sleep for a defined time before processing again
 		log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
 		time.Sleep(sleepTime)
 	}
+
 }
 
 // getEmailClient returns the appropriate RawEmailClient based on the environment

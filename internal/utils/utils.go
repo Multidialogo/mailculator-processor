@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"io"
 	"path/filepath"
 	"time"
 	"sort"
@@ -72,54 +73,82 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 
 // RemoveEmptyDirs deletes directories that do not contain .EML files and have not been modified since the threshold.
 func RemoveEmptyDirs(dir string, threshold time.Time) error {
-	// Walk through the directory recursively
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		// Skip if there's an error accessing the path
+	var emptyDirs, err = findEmptyDirs(dir, threshold)
+	if err != nil {
+		return err
+	}
+
+	// Remove the collected empty directories
+	var removalErrors []error
+	// Remove the collected empty directories
+	for _, path := range emptyDirs {
+		err := os.Remove(path)
 		if err != nil {
-			return err
+			if os.IsNotExist(err) {
+				continue // Already deleted, ignore
+			}
+			removalErrors = append(removalErrors, fmt.Errorf("failed to remove directory %s: %v", path, err))
 		}
+	}
 
-		// Skip the root directory from removal
-		if path == dir {
-			return nil
-		}
+	if len(removalErrors) > 0 {
+		return fmt.Errorf("Errors during removal operations: %v", removalErrors)
+	}
 
-		// Process directories only
-		if info.IsDir() {
-			// First, check if the directory has been modified since the threshold
+	return nil
+}
+
+func findEmptyDirs(dir string, threshold time.Time) ([]string, error) {
+	var emptyDirs []string
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			path := filepath.Join(dir, entry.Name())
+			info, err := os.Stat(path)
+			if err != nil {
+				return nil, err
+			}
+
 			if info.ModTime().Before(threshold) {
-				// Check if the directory contains any .EML files
 				containsEML, err := directoryContainsEML(path)
 				if err != nil {
-					return err
+					return nil, err
 				}
 
-				// If the directory doesn't contain .EML files, it's empty, remove it
 				if !containsEML {
-					// First, attempt to remove the contents of the directory
-					err := removeDirectoryContents(path)
+					empty, err := isDirectoryEmpty(path)
 					if err != nil {
-						return err
+						return nil, err
 					}
-
-					// Check if the directory still exists before trying to remove it
-					_, err = os.Stat(path)
-					if err == nil {
-						// The directory exists, attempt to remove it
-						err = os.Remove(path)
-						if err != nil {
-							return fmt.Errorf("failed to remove directory %s: %v", path, err)
-						}
-					} else if os.IsNotExist(err) {
-						// Directory no longer exists, log and skip
-					} else {
-						return err // other errors (permissions, etc.)
+					if empty {
+						emptyDirs = append(emptyDirs, path)
 					}
 				}
 			}
 		}
-		return nil
-	})
+	}
+
+	return emptyDirs, nil
+}
+
+// isDirectoryEmpty checks if a directory is empty
+func isDirectoryEmpty(path string) (bool, error) {
+	d, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer d.Close()
+
+	_, err = d.Readdirnames(1) // Read at most one file
+	if err == io.EOF {
+		return true, nil // Directory is empty
+	}
+	return false, err // Either not empty or another error
 }
 
 // Helper function to check if the directory contains any .EML files
@@ -136,35 +165,4 @@ func directoryContainsEML(dir string) (bool, error) {
 		return nil
 	})
 	return containsEML, err
-}
-
-// Helper function to remove contents of a directory
-func removeDirectoryContents(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("failed to read directory contents: %v", err)
-	}
-
-	for _, entry := range entries {
-		entryPath := filepath.Join(dir, entry.Name())
-		if entry.IsDir() {
-			// Recursively remove contents of subdirectories
-			err := removeDirectoryContents(entryPath)
-			if err != nil {
-				return err
-			}
-			// Remove the subdirectory after cleaning its contents
-			err = os.Remove(entryPath)
-			if err != nil {
-				return fmt.Errorf("failed to remove subdirectory %s: %v", entryPath, err)
-			}
-		} else {
-			// Remove individual files
-			err := os.Remove(entryPath)
-			if err != nil {
-				return fmt.Errorf("failed to remove file %s: %v", entryPath, err)
-			}
-		}
-	}
-	return nil
 }

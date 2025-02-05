@@ -6,6 +6,8 @@ import (
 	"time"
 	"sort"
 	"fmt"
+
+	"github.com/gofrs/flock"
 )
 
 // MoveFile ensures the destination directory exists and moves the file
@@ -38,6 +40,12 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 			return err
 		}
 
+		// Check if the file is locked at the filesystem level
+		if isFileLocked(path) {
+			// If the file is locked, skip it
+			return nil
+		}
+
 		// Skip directories and process only .EML files
 		if info.IsDir() || filepath.Ext(path) != ".EML" {
 			return nil
@@ -68,6 +76,29 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 	})
 
 	return files, nil
+}
+
+func isFileLocked(filePath string) bool {
+	// Create a flock instance for the given file
+	fileLock := flock.New(filePath)
+
+	// Try to acquire an exclusive (blocking) lock on the file
+	locked, err := fileLock.TryLock()
+	if err != nil {
+		// If there was an error trying to lock the file, report it
+		fmt.Println("Error trying to lock file:", err)
+		return false
+	}
+
+	// If locked is true, that means the file was locked successfully
+	if locked {
+		// Release the lock immediately (because we just wanted to check)
+		fileLock.Unlock()
+		return false
+	}
+
+	// If the lock could not be obtained, the file is locked
+	return true
 }
 
 // RemoveEmptyDirs deletes directories that do not contain .EML files and have not been modified since the threshold.

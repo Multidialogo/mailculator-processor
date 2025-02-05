@@ -40,12 +40,6 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 			return err
 		}
 
-		// Check if the file is locked at the filesystem level
-		if isFileLocked(path) {
-			// If the file is locked, skip it
-			return nil
-		}
-
 		// Skip directories and process only .EML files
 		if info.IsDir() || filepath.Ext(path) != ".EML" {
 			return nil
@@ -55,6 +49,13 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 		if info.ModTime().Before(lastModificationThreshold) {
 			files = append(files, path)
 		}
+
+		// Check if the file is locked at the filesystem level
+		if isFileLocked(path) {
+			// If the file is locked, skip it
+			return nil
+		}
+
 		return nil
 	})
 

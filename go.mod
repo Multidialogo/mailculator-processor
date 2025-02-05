@@ -5,6 +5,7 @@ go 1.23
 require (
         github.com/aws/aws-sdk-go-v2/config v1.29.2
         github.com/aws/aws-sdk-go-v2/service/ses v1.29.7
+        github.com/gofrs/flock v0.12.1
         github.com/joho/godotenv v1.5.1
         github.com/shirou/gopsutil v3.21.11+incompatible
 )

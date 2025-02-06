@@ -56,6 +56,8 @@ To run the development container:
 docker run --rm -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
 ```
 
+To access `Prometheus` live stats [click here](http://localhost:9090/prometheus).
+
 ### Stage 3: Production
 
 Purpose: This stage is optimized for production deployment. It creates a minimal container to run the mailculator processor binary in a secure and efficient environment.

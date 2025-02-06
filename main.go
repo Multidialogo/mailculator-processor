@@ -13,6 +13,7 @@ import (
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
+	"mailculator-processor/metrics"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 )
@@ -25,10 +26,13 @@ var considerEmptyAfterTime time.Duration
 var rawEmailClient service.RawEmailClient
 
 func init() {
+
 	// Retrieve paths from the configuration
 	registry := config.GetRegistry()
+	envName := registry.Get("ENV")
 	basePath = registry.Get("APP_DATA_PATH")
 	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
+	metrics.Init(envName)
 
 	if _, err := os.Stat(outboxBasePath); os.IsNotExist(err) {
 		err = os.MkdirAll(outboxBasePath, os.ModePerm)
@@ -58,7 +62,7 @@ func init() {
 	lastModTime = -time.Duration(lastModInterval) * time.Second
 	considerEmptyAfterTime = -time.Duration(considerEmptyAfterInterval) * time.Second
 
-	rawEmailClient = getEmailClient(registry.Get("ENV"))
+	rawEmailClient = getEmailClient(envName)
 }
 
 func main() {
@@ -104,6 +108,9 @@ func main() {
 			}
 			log.Printf("\033[34mINFO: Found: %d message files to process\033[0m", len(files))
 
+			// Update the in-progress files gauge
+			metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
+
 			// Process each file by calling SendEMLFile in parallel
 			var wg sync.WaitGroup
 
@@ -133,6 +140,9 @@ func main() {
 					if err != nil {
 						log.Printf("\033[31mCRITICAL: Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err)
 					}
+
+					// Update the processed files counter with status 'success'
+					metrics.ProcessedFilesCounter.WithLabelValues("success").Inc()
 				}(file) // Pass the file to the goroutine
 			}
 
@@ -162,7 +172,7 @@ func getEmailClient(env string) service.RawEmailClient {
 	return sesClient
 }
 
-// printStats logs the memory and CPU stats
+// printStats logs the memory and CPU stats and updates the Prometheus metrics
 func printStats() {
 	// Memory stats using gopsutil/mem
 	v, err := mem.VirtualMemory()
@@ -170,10 +180,21 @@ func printStats() {
 		log.Printf("\033[31mCRITICAL: Error fetching memory usage: %v\033[0m", err)
 	}
 
+	// Update the Prometheus memory usage gauge
+	MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
+	MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
+	MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
+	MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
+
 	// CPU stats
 	cpus, err := cpu.Percent(0, false)
 	if err != nil {
 		log.Printf("\033[31mCRITICAL: Error fetching CPU usage: %v\033[0m", err)
+	}
+
+	// Update the Prometheus CPU usage gauge
+	if len(cpus) > 0 {
+		CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
 	}
 
 	log.Printf(

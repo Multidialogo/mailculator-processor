@@ -13,7 +13,7 @@ import (
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
-	"mailculator-processor/metrics"
+	"mailculator-processor/internal/metrics"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 )
@@ -167,7 +167,7 @@ func getEmailClient(env string) service.RawEmailClient {
 	// Otherwise, return the real SES client for production
 	sesClient, err := service.NewSESClient()
 	if err != nil {
-		log.Fatalf("Failed to create SES client: %v", err)
+		log.Fatalf("\u001B[31mCRITICAL: Failed to create SES client: %v\u001B[0m", err)
 	}
 	return sesClient
 }
@@ -181,10 +181,10 @@ func printStats() {
 	}
 
 	// Update the Prometheus memory usage gauge
-	MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
-	MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
-	MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
-	MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
+	metrics.MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
+	metrics.MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
+	metrics.MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
+	metrics.MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
 
 	// CPU stats
 	cpus, err := cpu.Percent(0, false)
@@ -194,7 +194,7 @@ func printStats() {
 
 	// Update the Prometheus CPU usage gauge
 	if len(cpus) > 0 {
-		CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
+		metrics.CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
 	}
 
 	log.Printf(

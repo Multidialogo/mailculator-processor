@@ -57,7 +57,7 @@ func Init(envName string) {
 		prometheusPort := registry.Get("PROMETHEUS_PORT")
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
-			log.Println("Starting Prometheus metrics server on :%d", prometheusPort)
+			log.Printf("\u001B[34mINFO: Starting Prometheus metrics server on :%s\u001B[0m", prometheusPort)
 			if err := http.ListenAndServe(":"+prometheusPort, nil); err != nil {
 				log.Fatalf("Error starting Prometheus server: %v", err)
 			}

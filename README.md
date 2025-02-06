@@ -53,8 +53,10 @@ sudo chown -R "$(whoami):$(id -gn)" ./data && ./data/maildir/dummy-gen.sh
 
 To run the development container:
 ```bash
-docker run --rm -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
+docker run --rm -p9090:9090 -v$(pwd)/data:/var/lib/mailculator-processor mailculatorp-dev
 ```
+
+To access `Prometheus` live stats [click here](http://localhost:9090/metrics).
 
 ### Stage 3: Production
 

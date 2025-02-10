@@ -1,5 +1,9 @@
 package file_locker
 
+import (
+	"github.com/redis/go-redis/v9"
+)
+
 type Factory struct {
 	driver string
 }

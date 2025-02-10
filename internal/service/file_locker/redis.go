@@ -1,6 +1,8 @@
 package file_locker
 
 import (
+	"fmt"
+
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
@@ -48,7 +50,7 @@ func (rl *RedisLocker) Unlock() (bool, error) {
 		return false, nil
 	}
 
-	_, err = l.redisMutex.Unlock()
+	_, err = rl.redisMutex.Unlock()
 	if err != nil {
 		return false, err
 	}

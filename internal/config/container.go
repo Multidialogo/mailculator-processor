@@ -9,6 +9,7 @@ import (
 
 	"mailculator-processor/internal/service/email_client"
 	"mailculator-processor/internal/service/file_processor"
+	"mailculator-processor/internal/service/metrics"
 )
 
 type parameters struct {
@@ -21,6 +22,7 @@ type parameters struct {
 }
 
 type Container struct {
+	Metrics       *metrics.Metrics
 	FileProcessor *file_processor.FileProcessor
 	parameters    parameters
 }
@@ -30,17 +32,25 @@ func NewContainer() (*Container, error) {
 	var envName = registry.Get("ENV")
 	var basePath = registry.Get("BASE_PATH")
 	var emailClient email_client.EmailClient
+	var metricsService *metrics.Metrics
 	var err error
 
 	if envName == "TEST" || envName == "DEV" {
 		// Return a fake client for testing or development
 		emailClient = &email_client.FakeEmailClient{}
+		metricsService = metrics.NewMetrics(false, 0)
 	} else {
 		// Otherwise, return the real SES client for production
 		emailClient, err = email_client.NewSESClient()
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create SES client: %v", err)
 		}
+		// Convert the string values to integers
+		prometheusPort, err := strconv.Atoi(registry.Get("PROMETHEUS_PORT"))
+		if err != nil {
+			return nil, fmt.Errorf("Error converting PROMETHEUS_PORT: %v", err)
+		}
+		metricsService = metrics.NewMetrics(true, prometheusPort)
 	}
 
 	// Convert the string values to integers
@@ -60,6 +70,7 @@ func NewContainer() (*Container, error) {
 	}
 
 	return &Container{
+		Metrics:       metricsService,
 		FileProcessor: file_processor.NewFileProcessor(emailClient),
 		parameters: parameters{
 			envName:                envName,

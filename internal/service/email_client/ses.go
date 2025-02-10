@@ -1,4 +1,4 @@
-package service
+package email_client
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 )
 
-// SESClient is a specific implementation of RawEmailClient for SES
+// SESClient is a specific implementation of EmailClient for SES
 type SESClient struct {
 	client *ses.Client
 }

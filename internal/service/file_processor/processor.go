@@ -1,14 +1,22 @@
-package service
+package file_processor
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/gofrs/flock"
+	"mailculator-processor/internal/service/email_client"
 )
 
-// SendRawEmail sends a raw email using the provided RawEmailClient
-func SendRawEmail(filePath string, client RawEmailClient) (error, *RawEmailOutput) {
+type FileProcessor struct {
+	emailClient email_client.EmailClient
+}
+
+func NewFileProcessor(emailClient email_client.EmailClient) *FileProcessor {
+	return &FileProcessor{emailClient: emailClient}
+}
+
+func (fp *FileProcessor) SendRawEmail(filePath string) (error, *email_client.RawEmailOutput) {
 	// Create a flock instance for the lock file
 	lock := flock.New(filePath)
 
@@ -38,12 +46,12 @@ func SendRawEmail(filePath string, client RawEmailClient) (error, *RawEmailOutpu
 	}
 
 	// Prepare the input for the raw email client
-	input := &RawEmailInput{
+	input := &email_client.RawEmailInput{
 		Data: emlContent,
 	}
 
 	// Send the email using the provided client
-	result, err := client.SendRawEmail(input)
+	result, err := fp.emailClient.SendRawEmail(input)
 	if err != nil {
 		return fmt.Errorf("failed to send email: %v", err), nil
 	}

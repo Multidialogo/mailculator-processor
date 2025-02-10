@@ -7,71 +7,42 @@ import (
 	"sync"
 	"time"
 	"strings"
-	"strconv"
 	"fmt"
 
 	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
 	"mailculator-processor/internal/metrics"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 )
 
-var basePath string
-var outboxBasePath string
-var sleepTime time.Duration
-var lastModTime time.Duration
-var considerEmptyAfterTime time.Duration
-var rawEmailClient service.RawEmailClient
+var container *config.Container
 
 func init() {
+	var err error
 
-	// Retrieve paths from the configuration
-	registry := config.GetRegistry()
-	envName := registry.Get("ENV")
-	basePath = registry.Get("APP_DATA_PATH")
-	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
-	metrics.Init(envName)
+	container, err = config.NewContainer()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create container: %v", err))
+	}
 
-	if _, err := os.Stat(outboxBasePath); os.IsNotExist(err) {
-		err = os.MkdirAll(outboxBasePath, os.ModePerm)
+	metrics.Init(container.GetString("envName"))
+
+	if _, err := os.Stat(container.GetString("outboxBasePath")); os.IsNotExist(err) {
+		err = os.MkdirAll(container.GetString("outboxBasePath"), os.ModePerm)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create directory: %v", err))
 		}
 	}
-
-	// Convert the string values to integers
-	checkInterval, err := strconv.Atoi(registry.Get("CHECK_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting CHECK_INTERVAL: %v", err))
-	}
-
-	lastModInterval, err := strconv.Atoi(registry.Get("LAST_MOD_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting LAST_MOD_INTERVAL: %v", err))
-	}
-
-	considerEmptyAfterInterval, err := strconv.Atoi(registry.Get("EMPTY_DIR_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting EMPTY_DIR_INTERVAL: %v", err))
-	}
-
-	// Convert to time.Duration
-	sleepTime = time.Duration(checkInterval) * time.Second
-	lastModTime = -time.Duration(lastModInterval) * time.Second
-	considerEmptyAfterTime = -time.Duration(considerEmptyAfterInterval) * time.Second
-
-	rawEmailClient = getEmailClient(envName)
 }
 
 func main() {
+	var basePath = container.GetString("basePath")
+	var outboxBasePath = container.GetString("outboxBasePath")
+	var sleepTime = container.GetDuration("sleepTime")
+	var lastModTime = container.GetDuration("lastModTime")
+	var considerEmptyAfterTime = container.GetDuration("considerEmptyAfterTime")
 	var cycles int = 0
-
-	log.Printf(
-		"\033[36mDEBUG: config -> outbox: %s, sleep time: %d s, old file: %d s, old directory: %d s\033[0m",
-		outboxBasePath, int(sleepTime.Seconds()), int(lastModTime.Seconds()), int(considerEmptyAfterTime.Seconds()),
-	)
 
 	// Main loop to process files periodically
 	for {
@@ -124,8 +95,7 @@ func main() {
 
 					log.Printf("\033[34mINFO: Processing: %s\033[0m", outboxRelativePath)
 
-					// Call the service.SendEMLFile function for each outboxFilePath
-					err, result := service.SendRawEmail(outboxFilePath, rawEmailClient)
+					err, result := container.FileProcessor.SendRawEmail(outboxFilePath)
 					var destPath string = filepath.Join(basePath, strings.Replace(outboxRelativePath, "/outbox", "", -1))
 					if err != nil {
 						log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
@@ -154,22 +124,6 @@ func main() {
 		// Record memory and CPU usage at the end
 		printStats()
 	}
-
-}
-
-// getEmailClient returns the appropriate RawEmailClient based on the environment
-func getEmailClient(env string) service.RawEmailClient {
-	if env == "TEST" || env == "DEV" {
-		// Return a fake client for testing or development
-		return &service.FakeEmailClient{}
-	}
-
-	// Otherwise, return the real SES client for production
-	sesClient, err := service.NewSESClient()
-	if err != nil {
-		log.Fatalf("\u001B[31mCRITICAL: Failed to create SES client: %v\u001B[0m", err)
-	}
-	return sesClient
 }
 
 // printStats logs the memory and CPU stats and updates the Prometheus metrics

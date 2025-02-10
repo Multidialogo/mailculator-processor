@@ -9,6 +9,7 @@ import (
 
 	"mailculator-processor/internal/service/email_client"
 	"mailculator-processor/internal/service/file_processor"
+	"mailculator-processor/internal/service/file_locker"
 	"mailculator-processor/internal/service/metrics"
 )
 
@@ -31,13 +32,15 @@ func NewContainer() (*Container, error) {
 	var registry = GetRegistry()
 	var envName = registry.Get("ENV")
 	var basePath = registry.Get("BASE_PATH")
-	var emailClient email_client.EmailClient
 	var metricsService *metrics.Metrics
+	var fileLockerFactory *file_locker.Factory
+	var emailClient email_client.EmailClient
 	var err error
 
 	if envName == "TEST" || envName == "DEV" {
 		// Return a fake client for testing or development
 		emailClient = &email_client.FakeEmailClient{}
+		fileLockerFactory = file_locker.NewFactory("FS")
 		metricsService = metrics.NewMetrics(false, 0)
 	} else {
 		// Otherwise, return the real SES client for production
@@ -50,6 +53,7 @@ func NewContainer() (*Container, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Error converting PROMETHEUS_PORT: %v", err)
 		}
+		fileLockerFactory = file_locker.NewFactory("REDIS")
 		metricsService = metrics.NewMetrics(true, prometheusPort)
 	}
 
@@ -71,7 +75,7 @@ func NewContainer() (*Container, error) {
 
 	return &Container{
 		Metrics:       metricsService,
-		FileProcessor: file_processor.NewFileProcessor(emailClient),
+		FileProcessor: file_processor.NewFileProcessor(emailClient, fileLockerFactory),
 		parameters: parameters{
 			envName:                envName,
 			basePath:               basePath,

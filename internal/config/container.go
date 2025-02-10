@@ -1,16 +1,20 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"reflect"
-	"time"
 	"path/filepath"
+	"reflect"
 	"strconv"
+	"time"
 
 	"mailculator-processor/internal/service/email_client"
-	"mailculator-processor/internal/service/file_processor"
 	"mailculator-processor/internal/service/file_locker"
+	"mailculator-processor/internal/service/file_processor"
 	"mailculator-processor/internal/service/metrics"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/redis/go-redis/v9"
 )
 
 type parameters struct {
@@ -40,11 +44,23 @@ func NewContainer() (*Container, error) {
 	if envName == "TEST" || envName == "DEV" {
 		// Return a fake client for testing or development
 		emailClient = &email_client.FakeEmailClient{}
-		fileLockerFactory = file_locker.NewFactory("FS")
+		fileLockerFactory = file_locker.NewFactory("FS", nil)
 		metricsService = metrics.NewMetrics(false, 0)
 	} else {
+		var redisHost = registry.Get("REDIS_HOST")
+		var redisPort = registry.Get("REDIS_PORT")
+		// Load AWS configuration
+		var awsCfg, err = config.LoadDefaultConfig(context.TODO())
+		if err != nil {
+			return nil, fmt.Errorf("unable to load AWS config, %v", err)
+		}
+
+		var redisClient = redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%s", redisHost, redisPort),
+		})
+
 		// Otherwise, return the real SES client for production
-		emailClient, err = email_client.NewSESClient()
+		emailClient, err = email_client.NewSESClient(awsCfg)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create SES client: %v", err)
 		}
@@ -53,7 +69,7 @@ func NewContainer() (*Container, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Error converting PROMETHEUS_PORT: %v", err)
 		}
-		fileLockerFactory = file_locker.NewFactory("REDIS")
+		fileLockerFactory = file_locker.NewFactory("REDIS", redisClient)
 		metricsService = metrics.NewMetrics(true, prometheusPort)
 	}
 

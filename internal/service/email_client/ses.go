@@ -2,8 +2,7 @@ package email_client
 
 import (
 	"context"
-	"fmt"
-	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 )
@@ -14,12 +13,7 @@ type SESClient struct {
 }
 
 // NewSESClient initializes and returns a new SESClient
-func NewSESClient() (*SESClient, error) {
-	// Load AWS configuration
-	cfg, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		return nil, fmt.Errorf("unable to load AWS config, %v", err)
-	}
+func NewSESClient(cfg aws.Config) (*SESClient, error) {
 
 	// Create SES client from AWS config
 	client := ses.NewFromConfig(cfg)

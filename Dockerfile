@@ -25,6 +25,6 @@ CMD ["go", "run", "main.go"]
 FROM gcr.io/distroless/base-debian12 AS mailculatorp-prod
 WORKDIR /usr/local/bin/mailculator
 COPY --from=mailculatorp-builder /usr/local/bin/mailculator-processor/daemon /usr/local/bin/mailculator-processor/daemon
-COPY .env.prod /usr/local/bin/mailculator-processor/.env
+COPY .env.prod.dist /usr/local/bin/mailculator-processor/.env
 EXPOSE 8080
 CMD ["daemon"]

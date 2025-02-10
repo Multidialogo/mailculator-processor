@@ -4,21 +4,25 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gofrs/flock"
 	"mailculator-processor/internal/service/email_client"
+	"mailculator-processor/internal/service/file_locker"
 )
 
 type FileProcessor struct {
-	emailClient email_client.EmailClient
+	emailClient       email_client.EmailClient
+	fileLockerFactory *file_locker.Factory
 }
 
-func NewFileProcessor(emailClient email_client.EmailClient) *FileProcessor {
-	return &FileProcessor{emailClient: emailClient}
+func NewFileProcessor(emailClient email_client.EmailClient, fileLockerFactory *file_locker.Factory) *FileProcessor {
+	return &FileProcessor{
+		emailClient:       emailClient,
+		fileLockerFactory: fileLockerFactory,
+	}
 }
 
 func (fp *FileProcessor) SendRawEmail(filePath string) (error, *email_client.RawEmailOutput) {
 	// Create a flock instance for the lock file
-	lock := flock.New(filePath)
+	lock := fp.fileLockerFactory.GetInstance(filePath)
 
 	// Try to acquire an exclusive lock on the file
 	locked, err := lock.TryLock()

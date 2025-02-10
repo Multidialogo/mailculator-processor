@@ -11,7 +11,6 @@ import (
 
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/utils"
-	"mailculator-processor/internal/metrics"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 )
@@ -25,8 +24,6 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create container: %v", err))
 	}
-
-	metrics.Init(container.GetString("envName"))
 
 	if _, err := os.Stat(container.GetString("outboxBasePath")); os.IsNotExist(err) {
 		err = os.MkdirAll(container.GetString("outboxBasePath"), os.ModePerm)
@@ -80,7 +77,7 @@ func main() {
 			log.Printf("\033[34mINFO: Found: %d message files to process\033[0m", len(files))
 
 			// Update the in-progress files gauge
-			metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
+			container.Metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
 
 			// Process each file by calling SendEMLFile in parallel
 			var wg sync.WaitGroup
@@ -112,7 +109,7 @@ func main() {
 					}
 
 					// Update the processed files counter with status 'success'
-					metrics.ProcessedFilesCounter.WithLabelValues("success").Inc()
+					container.Metrics.ProcessedFilesCounter.WithLabelValues("success").Inc()
 				}(file) // Pass the file to the goroutine
 			}
 
@@ -135,10 +132,10 @@ func printStats() {
 	}
 
 	// Update the Prometheus memory usage gauge
-	metrics.MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
+	container.Metrics.MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
+	container.Metrics.MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
+	container.Metrics.MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
+	container.Metrics.MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
 
 	// CPU stats
 	cpus, err := cpu.Percent(0, false)
@@ -148,7 +145,7 @@ func printStats() {
 
 	// Update the Prometheus CPU usage gauge
 	if len(cpus) > 0 {
-		metrics.CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
+		container.Metrics.CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
 	}
 
 	log.Printf(

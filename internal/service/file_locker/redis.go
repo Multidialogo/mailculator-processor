@@ -17,7 +17,7 @@ func NewRedisLocker(redisClient *redis.Client, filePath string) *RedisLocker {
 	pool := goredis.NewPool(redisClient)
 	rs := redsync.New(pool)
 
-	mutex := rs.NewMutex("file-lock:" + filePath)
+	mutex := rs.NewMutex(fmt.Sprintf("file-lock:%s", filePath))
 
 	return &RedisLocker{
 		redisMutex: mutex,
@@ -34,7 +34,7 @@ func (rl *RedisLocker) TryLock() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !fsLock {
+	if fsLock == false {
 		return false, nil
 	}
 
@@ -46,7 +46,7 @@ func (rl *RedisLocker) Unlock() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !fsLock {
+	if fsLock == false {
 		return false, nil
 	}
 

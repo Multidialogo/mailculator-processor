@@ -16,15 +16,13 @@ func NewFSLocker(filePath string) *FSLocker {
 	}
 }
 
-func (L *FSLocker) TryLock() (bool, error) {
-	// Try to acquire an exclusive lock on the file
-	locked, err := L.lock.TryLock()
+func (fsl *FSLocker) TryLock() (bool, error) {
+	locked, err := fsl.lock.TryLock()
 	if err != nil {
 		// If an error occurred, print it
 		return false, fmt.Errorf("Error locking file: %v", err)
 	}
 
-	// If the file is locked, skip processing
 	if !locked {
 		return false, nil
 	}
@@ -32,9 +30,9 @@ func (L *FSLocker) TryLock() (bool, error) {
 	return true, nil
 }
 
-func (L *FSLocker) Unlock() (bool, error) {
-	// FIXME: check for error on Unlock
-	L.lock.Unlock()
+func (fsl *FSLocker) Unlock() (bool, error) {
+	// TODO: check for error on Unlock if needed
+	fsl.lock.Unlock()
 
 	return true, nil
 }

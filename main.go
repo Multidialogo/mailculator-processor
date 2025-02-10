@@ -2,81 +2,52 @@ package main
 
 import (
 	"os"
-	"log"
 	"path/filepath"
 	"sync"
 	"time"
 	"strings"
-	"strconv"
 	"fmt"
 
 	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/service"
 	"mailculator-processor/internal/utils"
-	"mailculator-processor/internal/metrics"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
+	"mailculator-processor/internal/service/logger"
 )
 
-var basePath string
-var outboxBasePath string
-var sleepTime time.Duration
-var lastModTime time.Duration
-var considerEmptyAfterTime time.Duration
-var rawEmailClient service.RawEmailClient
+var container *config.Container
 
 func init() {
+	var err error
 
-	// Retrieve paths from the configuration
-	registry := config.GetRegistry()
-	envName := registry.Get("ENV")
-	basePath = registry.Get("APP_DATA_PATH")
-	outboxBasePath = filepath.Join(basePath, registry.Get("OUTBOX_PATH"))
-	metrics.Init(envName)
+	container, err = config.NewContainer()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create container: %v", err))
+	}
 
-	if _, err := os.Stat(outboxBasePath); os.IsNotExist(err) {
-		err = os.MkdirAll(outboxBasePath, os.ModePerm)
+	if _, err := os.Stat(container.GetString("outboxBasePath")); os.IsNotExist(err) {
+		err = os.MkdirAll(container.GetString("outboxBasePath"), os.ModePerm)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create directory: %v", err))
 		}
 	}
-
-	// Convert the string values to integers
-	checkInterval, err := strconv.Atoi(registry.Get("CHECK_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting CHECK_INTERVAL: %v", err))
-	}
-
-	lastModInterval, err := strconv.Atoi(registry.Get("LAST_MOD_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting LAST_MOD_INTERVAL: %v", err))
-	}
-
-	considerEmptyAfterInterval, err := strconv.Atoi(registry.Get("EMPTY_DIR_INTERVAL"))
-	if err != nil {
-		panic(fmt.Sprintf("Error converting EMPTY_DIR_INTERVAL: %v", err))
-	}
-
-	// Convert to time.Duration
-	sleepTime = time.Duration(checkInterval) * time.Second
-	lastModTime = -time.Duration(lastModInterval) * time.Second
-	considerEmptyAfterTime = -time.Duration(considerEmptyAfterInterval) * time.Second
-
-	rawEmailClient = getEmailClient(envName)
 }
 
 func main() {
+	var log = logger.NewLogger()
+	var basePath = container.GetString("basePath")
+	var outboxBasePath = container.GetString("outboxBasePath")
+	var sleepTime = container.GetDuration("sleepTime")
+	var lastModTime = container.GetDuration("lastModTime")
+	var considerEmptyAfterTime = container.GetDuration("considerEmptyAfterTime")
 	var cycles int = 0
-
-	log.Printf(
-		"\033[36mDEBUG: config -> outbox: %s, sleep time: %d s, old file: %d s, old directory: %d s\033[0m",
-		outboxBasePath, int(sleepTime.Seconds()), int(lastModTime.Seconds()), int(considerEmptyAfterTime.Seconds()),
-	)
 
 	// Main loop to process files periodically
 	for {
 		// Record memory and CPU usage at the start
-		printStats()
+		err := container.Metrics.CollectMemoryAndCpu()
+		if err != nil {
+			log.Print("CRITICAL", fmt.Sprintf("%v", err))
+		}
+
 		startTime := time.Now()
 		currentTime := time.Now()
 
@@ -85,31 +56,32 @@ func main() {
 		if cycles == 10 {
 			considerEmptyAfterTimeThreshold := currentTime.Add(considerEmptyAfterTime)
 			// Cleaning up orphans directories from outbox
-			log.Printf("\033[34mINFO: Cleanup outbox %s, older than %ds\033[0m", outboxBasePath, int(considerEmptyAfterTime.Seconds()))
-			err := utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
+			log.Print("INFO", fmt.Sprintf("Cleanup outbox %s, older than %ds", outboxBasePath, int(considerEmptyAfterTime.Seconds())))
+			err = utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
 			if err != nil {
-				log.Printf("\033[31mCRITICAL: Failed to cleanup outbox: %v\033[0m", err)
+				log.Print("CRITICAL", fmt.Sprintf("Error trying to remove empty directories: %v", err))
 			}
 
 			// Sleep for a defined time before processing again
-			log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
+			log.Print("INFO", fmt.Sprintf("Sleeping for %v", sleepTime))
 			time.Sleep(sleepTime)
 
 			cycles = 0
 		} else {
 			// Get the current time and define the lastModTimeThreshold (15 seconds ago)
 			lastModTimeThreshold := currentTime.Add(lastModTime)
-			log.Printf("\033[34mINFO: Listing files in: %s, older than %ds\033[0m", outboxBasePath, int(lastModTime.Seconds()))
+			log.Print("INFO", fmt.Sprintf("Listing files in: %s, older than %ds", outboxBasePath, int(lastModTime.Seconds())))
 
 			// Get list of files to process
 			files, err := utils.ListFiles(outboxBasePath, lastModTimeThreshold)
 			if err != nil {
-				log.Fatalf("Error listing files: %v", err)
+				log.Fatal("EMERGENCY", fmt.Sprintf(" Error listing files: %v", err))
 			}
-			log.Printf("\033[34mINFO: Found: %d message files to process\033[0m", len(files))
+
+			log.Print("INFO", fmt.Sprintf("Found: %d message files to process", len(files)))
 
 			// Update the in-progress files gauge
-			metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
+			container.Metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
 
 			// Process each file by calling SendEMLFile in parallel
 			var wg sync.WaitGroup
@@ -122,84 +94,38 @@ func main() {
 
 					outboxRelativePath := strings.Replace(outboxFilePath, outboxBasePath, "", 1)
 
-					log.Printf("\033[34mINFO: Processing: %s\033[0m", outboxRelativePath)
+					log.Print("INFO", fmt.Sprintf("Processing: %s", outboxRelativePath))
 
-					// Call the service.SendEMLFile function for each outboxFilePath
-					err, result := service.SendRawEmail(outboxFilePath, rawEmailClient)
+					err, result := container.FileProcessor.SendRawEmail(outboxFilePath)
 					var destPath string = filepath.Join(basePath, strings.Replace(outboxRelativePath, "/outbox", "", -1))
 					if err != nil {
-						log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
+						log.Print("CRITICAL", fmt.Sprintf("Error processing outboxFilePath %s: %v", outboxFilePath, err))
 						destPath = strings.Replace(destPath, "/queues", "/failure/queues", -1)
 					} else {
-						log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s, result: %v\033[0m", outboxFilePath, result)
+						log.Print("INFO", fmt.Sprintf("Successfully processed outboxFilePath: %s, result: %v", outboxFilePath, result))
 						destPath = strings.Replace(destPath, "/queues", "/sent/queues", -1)
 					}
 
-					log.Printf("\033[34mINFO: Moving file from %s to %s\033[0m", outboxFilePath, destPath)
+					log.Print("INFO", fmt.Sprintf("Moving file from %s to %s", outboxFilePath, destPath))
 					err = utils.MoveFile(outboxFilePath, destPath)
 					if err != nil {
-						log.Printf("\033[31mCRITICAL: Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err)
+						log.Print("CRITICAL", fmt.Sprintf("Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err))
 					}
 
 					// Update the processed files counter with status 'success'
-					metrics.ProcessedFilesCounter.WithLabelValues("success").Inc()
+					container.Metrics.ProcessedFilesCounter.WithLabelValues("success").Inc()
 				}(file) // Pass the file to the goroutine
 			}
 
 			wg.Wait() // Wait for all goroutines to finish
 		}
 
-		log.Printf("\u001B[36mDEBUG: Elapsed time: %.2f seconds\n\033[0m", time.Since(startTime).Seconds())
+		log.Print("DEBUG", fmt.Sprintf("Elapsed time: %.2f seconds", time.Since(startTime).Seconds()))
 
 		// Record memory and CPU usage at the end
-		printStats()
+		err = container.Metrics.CollectMemoryAndCpu()
+		if err != nil {
+			log.Print("CRITICAL", fmt.Sprintf("%v", err))
+		}
 	}
-
-}
-
-// getEmailClient returns the appropriate RawEmailClient based on the environment
-func getEmailClient(env string) service.RawEmailClient {
-	if env == "TEST" || env == "DEV" {
-		// Return a fake client for testing or development
-		return &service.FakeEmailClient{}
-	}
-
-	// Otherwise, return the real SES client for production
-	sesClient, err := service.NewSESClient()
-	if err != nil {
-		log.Fatalf("\u001B[31mCRITICAL: Failed to create SES client: %v\u001B[0m", err)
-	}
-	return sesClient
-}
-
-// printStats logs the memory and CPU stats and updates the Prometheus metrics
-func printStats() {
-	// Memory stats using gopsutil/mem
-	v, err := mem.VirtualMemory()
-	if err != nil {
-		log.Printf("\033[31mCRITICAL: Error fetching memory usage: %v\033[0m", err)
-	}
-
-	// Update the Prometheus memory usage gauge
-	metrics.MemoryUsageGauge.WithLabelValues("total").Set(float64(v.Total)) // Total memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("used").Set(float64(v.Used))   // Used memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("free").Set(float64(v.Free))   // Free memory in bytes
-	metrics.MemoryUsageGauge.WithLabelValues("percent").Set(v.UsedPercent)  // Percent used
-
-	// CPU stats
-	cpus, err := cpu.Percent(0, false)
-	if err != nil {
-		log.Printf("\033[31mCRITICAL: Error fetching CPU usage: %v\033[0m", err)
-	}
-
-	// Update the Prometheus CPU usage gauge
-	if len(cpus) > 0 {
-		metrics.CpuUsageGauge.WithLabelValues("cpu0").Set(cpus[0]) // Assuming a single CPU for simplicity, can be extended for multiple CPUs
-	}
-
-	log.Printf(
-		"\u001B[33mDEBUG: MEMORY: Total = %v MiB, Used = %v MiB, Free = %v MiB, Percent = %v%%\033[0m",
-		v.Total/1024/1024, v.Used/1024/1024, v.Free/1024/1024, v.UsedPercent,
-	)
-	log.Printf("\u001B[33mDEBUG: CPU: Peak Usage = %v%%\033[0m", cpus[0])
 }

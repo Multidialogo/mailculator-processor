@@ -1,12 +1,15 @@
 package metrics
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
 type Metrics struct {
@@ -67,4 +70,31 @@ func NewMetrics(startHttpServer bool, httpPort int) *Metrics {
 	}
 
 	return metrics
+}
+
+func (m *Metrics) CollectMemoryAndCpu() error {
+
+	// Memory stat
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		return fmt.Errorf("Error fetching memory usage: %v", err)
+	}
+
+	// CPU stats
+	cpus, err := cpu.Percent(0, false)
+	if err != nil {
+		return fmt.Errorf("Error fetching memory usage: %v", err)
+	}
+
+	m.MemoryUsageGauge.WithLabelValues("total").Set(float64(memory.Total)) // Total memory in bytes
+	m.MemoryUsageGauge.WithLabelValues("used").Set(float64(memory.Used))   // Used memory in bytes
+	m.MemoryUsageGauge.WithLabelValues("free").Set(float64(memory.Free))   // Free memory in bytes
+	m.MemoryUsageGauge.WithLabelValues("percent").Set(memory.UsedPercent)  // Percent used
+
+	for i, cpuUsage := range cpus {
+		label := fmt.Sprintf("cpu%d", i)
+		m.CpuUsageGauge.WithLabelValues(label).Set(cpuUsage)
+	}
+
+	return nil
 }

@@ -1,4 +1,4 @@
-package service
+package email_client
 
 // RawEmailInput represents the raw email message input
 type RawEmailInput struct {
@@ -10,7 +10,7 @@ type RawEmailOutput struct {
 	MessageID string
 }
 
-// RawEmailClient defines the interface for sending raw emails
-type RawEmailClient interface {
+// EmailClient defines the interface for sending raw emails
+type EmailClient interface {
 	SendRawEmail(input *RawEmailInput) (*RawEmailOutput, error)
 }

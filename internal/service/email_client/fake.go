@@ -1,4 +1,4 @@
-package service
+package email_client
 
 import (
 	"crypto/md5"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// FakeEmailClient is a simple fake implementation of RawEmailClient
+// FakeEmailClient is a simple fake implementation of EmailClient
 type FakeEmailClient struct{}
 
 func (f *FakeEmailClient) SendRawEmail(input *RawEmailInput) (*RawEmailOutput, error) {

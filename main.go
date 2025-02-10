@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"log"
 	"path/filepath"
 	"sync"
 	"time"
@@ -11,6 +10,7 @@ import (
 
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/utils"
+	"mailculator-processor/internal/service/logger"
 )
 
 var container *config.Container
@@ -32,6 +32,7 @@ func init() {
 }
 
 func main() {
+	var log = logger.NewLogger()
 	var basePath = container.GetString("basePath")
 	var outboxBasePath = container.GetString("outboxBasePath")
 	var sleepTime = container.GetDuration("sleepTime")
@@ -44,7 +45,7 @@ func main() {
 		// Record memory and CPU usage at the start
 		err := container.Metrics.CollectMemoryAndCpu()
 		if err != nil {
-			log.Printf("\033[31mCRITICAL: %v\033[0m", err)
+			log.Print("CRITICAL", fmt.Sprintf("%v", err))
 		}
 
 		startTime := time.Now()
@@ -55,28 +56,29 @@ func main() {
 		if cycles == 10 {
 			considerEmptyAfterTimeThreshold := currentTime.Add(considerEmptyAfterTime)
 			// Cleaning up orphans directories from outbox
-			log.Printf("\033[34mINFO: Cleanup outbox %s, older than %ds\033[0m", outboxBasePath, int(considerEmptyAfterTime.Seconds()))
+			log.Print("INFO", fmt.Sprintf("Cleanup outbox %s, older than %ds", outboxBasePath, int(considerEmptyAfterTime.Seconds())))
 			err = utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
 			if err != nil {
-				log.Printf("\033[31mCRITICAL: Failed to cleanup outbox: %v\033[0m", err)
+				log.Print("CRITICAL", fmt.Sprintf("Error trying to remove empty directories: %v", err))
 			}
 
 			// Sleep for a defined time before processing again
-			log.Printf("\033[34mINFO: Sleeping for %v before recalling the process\033[0m", sleepTime)
+			log.Print("INFO", fmt.Sprintf("Sleeping for %v", sleepTime))
 			time.Sleep(sleepTime)
 
 			cycles = 0
 		} else {
 			// Get the current time and define the lastModTimeThreshold (15 seconds ago)
 			lastModTimeThreshold := currentTime.Add(lastModTime)
-			log.Printf("\033[34mINFO: Listing files in: %s, older than %ds\033[0m", outboxBasePath, int(lastModTime.Seconds()))
+			log.Print("INFO", fmt.Sprintf("Listing files in: %s, older than %ds", outboxBasePath, int(lastModTime.Seconds())))
 
 			// Get list of files to process
 			files, err := utils.ListFiles(outboxBasePath, lastModTimeThreshold)
 			if err != nil {
-				log.Fatalf("Error listing files: %v", err)
+				log.Fatal("EMERGENCY", fmt.Sprintf(" Error listing files: %v", err))
 			}
-			log.Printf("\033[34mINFO: Found: %d message files to process\033[0m", len(files))
+
+			log.Print("INFO", fmt.Sprintf("Found: %d message files to process", len(files)))
 
 			// Update the in-progress files gauge
 			container.Metrics.InProgressFilesGauge.WithLabelValues("outbox").Set(float64(len(files)))
@@ -92,22 +94,22 @@ func main() {
 
 					outboxRelativePath := strings.Replace(outboxFilePath, outboxBasePath, "", 1)
 
-					log.Printf("\033[34mINFO: Processing: %s\033[0m", outboxRelativePath)
+					log.Print("INFO", fmt.Sprintf("Processing: %s", outboxRelativePath))
 
 					err, result := container.FileProcessor.SendRawEmail(outboxFilePath)
 					var destPath string = filepath.Join(basePath, strings.Replace(outboxRelativePath, "/outbox", "", -1))
 					if err != nil {
-						log.Printf("\033[31mCRITICAL: Error processing outboxFilePath %s: %v\033[0m", outboxFilePath, err)
+						log.Print("CRITICAL", fmt.Sprintf("Error processing outboxFilePath %s: %v", outboxFilePath, err))
 						destPath = strings.Replace(destPath, "/queues", "/failure/queues", -1)
 					} else {
-						log.Printf("\033[34mINFO: Successfully processed outboxFilePath: %s, result: %v\033[0m", outboxFilePath, result)
+						log.Print("INFO", fmt.Sprintf("Successfully processed outboxFilePath: %s, result: %v", outboxFilePath, result))
 						destPath = strings.Replace(destPath, "/queues", "/sent/queues", -1)
 					}
 
-					log.Printf("\033[34mINFO: Moving file from %s to %s\033[0m", outboxFilePath, destPath)
+					log.Print("INFO", fmt.Sprintf("Moving file from %s to %s", outboxFilePath, destPath))
 					err = utils.MoveFile(outboxFilePath, destPath)
 					if err != nil {
-						log.Printf("\033[31mCRITICAL: Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err)
+						log.Print("CRITICAL", fmt.Sprintf("Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err))
 					}
 
 					// Update the processed files counter with status 'success'
@@ -118,12 +120,12 @@ func main() {
 			wg.Wait() // Wait for all goroutines to finish
 		}
 
-		log.Printf("\u001B[36mDEBUG: Elapsed time: %.2f seconds\n\033[0m", time.Since(startTime).Seconds())
+		log.Print("DEBUG", fmt.Sprintf("Elapsed time: %.2f seconds", time.Since(startTime).Seconds()))
 
 		// Record memory and CPU usage at the end
 		err = container.Metrics.CollectMemoryAndCpu()
 		if err != nil {
-			log.Printf("\033[31mCRITICAL: %v\033[0m", err)
+			log.Print("CRITICAL", fmt.Sprintf("%v", err))
 		}
 	}
 }

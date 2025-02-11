@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/utils"
 	"mailculator-processor/internal/service/logger"
 )
 
@@ -57,7 +56,7 @@ func main() {
 			considerEmptyAfterTimeThreshold := currentTime.Add(considerEmptyAfterTime)
 			// Cleaning up orphans directories from outbox
 			log.Print("INFO", fmt.Sprintf("Cleanup outbox %s, older than %ds", outboxBasePath, int(considerEmptyAfterTime.Seconds())))
-			err = utils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
+			err = container.FsUtils.RemoveEmptyDirs(outboxBasePath, considerEmptyAfterTimeThreshold)
 			if err != nil {
 				log.Print("CRITICAL", fmt.Sprintf("Error trying to remove empty directories: %v", err))
 			}
@@ -73,7 +72,7 @@ func main() {
 			log.Print("INFO", fmt.Sprintf("Listing files in: %s, older than %ds", outboxBasePath, int(lastModTime.Seconds())))
 
 			// Get list of files to process
-			files, err := utils.ListFiles(outboxBasePath, lastModTimeThreshold)
+			files, err := container.FsUtils.ListFiles(outboxBasePath, lastModTimeThreshold)
 			if err != nil {
 				log.Fatal("EMERGENCY", fmt.Sprintf(" Error listing files: %v", err))
 			}
@@ -107,7 +106,7 @@ func main() {
 					}
 
 					log.Print("INFO", fmt.Sprintf("Moving file from %s to %s", outboxFilePath, destPath))
-					err = utils.MoveFile(outboxFilePath, destPath)
+					err = container.FsUtils.MoveFile(outboxFilePath, destPath)
 					if err != nil {
 						log.Print("CRITICAL", fmt.Sprintf("Failed to move file from %s to %s: %v\033[0m", outboxFilePath, destPath, err))
 					}

@@ -11,10 +11,11 @@ import (
 	"mailculator-processor/internal/service/email_client"
 	"mailculator-processor/internal/service/file_locker"
 	"mailculator-processor/internal/service/file_processor"
+	"mailculator-processor/internal/service/fs_utils"
 	"mailculator-processor/internal/service/metrics"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/redis/go-redis/v9"
+	"github.com/aws/aws-sdk-go-v2/config"
 )
 
 type parameters struct {
@@ -29,6 +30,7 @@ type parameters struct {
 type Container struct {
 	Metrics       *metrics.Metrics
 	FileProcessor *file_processor.FileProcessor
+	FsUtils       *fs_utils.FsUtils
 	parameters    parameters
 }
 
@@ -49,16 +51,15 @@ func NewContainer() (*Container, error) {
 	} else {
 		var redisHost = registry.Get("REDIS_HOST")
 		var redisPort = registry.Get("REDIS_PORT")
+		var redisClient = redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%s", redisHost, redisPort),
+		})
+
 		// Load AWS configuration
 		var awsCfg, err = config.LoadDefaultConfig(context.TODO())
 		if err != nil {
 			return nil, fmt.Errorf("unable to load AWS config, %v", err)
 		}
-
-		var redisClient = redis.NewClient(&redis.Options{
-			Addr: fmt.Sprintf("%s:%s", redisHost, redisPort),
-		})
-
 		// Otherwise, return the real SES client for production
 		emailClient, err = email_client.NewSESClient(awsCfg)
 		if err != nil {
@@ -92,6 +93,7 @@ func NewContainer() (*Container, error) {
 	return &Container{
 		Metrics:       metricsService,
 		FileProcessor: file_processor.NewFileProcessor(emailClient, fileLockerFactory),
+		FsUtils:       fs_utils.NewFsUtils(fileLockerFactory),
 		parameters: parameters{
 			envName:                envName,
 			basePath:               basePath,

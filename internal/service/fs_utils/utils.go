@@ -1,17 +1,27 @@
-package utils
+package fs_utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 	"sort"
-	"fmt"
+	"time"
 
-	"github.com/gofrs/flock"
+	"mailculator-processor/internal/service/file_locker"
 )
 
+type FsUtils struct {
+	fileLockerFactory *file_locker.Factory
+}
+
+func NewFsUtils(fileLockerFactory *file_locker.Factory) *FsUtils {
+	return &FsUtils{
+		fileLockerFactory: fileLockerFactory,
+	}
+}
+
 // MoveFile ensures the destination directory exists and moves the file
-func MoveFile(originPath string, destinationPath string) error {
+func (fu *FsUtils) MoveFile(originPath string, destinationPath string) error {
 	// Get the parent directory of the destination path
 	destinationDir := filepath.Dir(destinationPath)
 
@@ -31,7 +41,7 @@ func MoveFile(originPath string, destinationPath string) error {
 }
 
 // ListFiles returns a sorted slice of file paths that were last modified more than the threshold.
-func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error) {
+func (fu *FsUtils) ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error) {
 	var files []string
 
 	// Walk through the directory
@@ -51,8 +61,9 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 		}
 
 		// Check if the file is locked at the filesystem level
-		if isFileLocked(path) {
+		if fu.isFileLocked(path) != false {
 			// If the file is locked, skip it
+
 			return nil
 		}
 
@@ -79,16 +90,17 @@ func ListFiles(dir string, lastModificationThreshold time.Time) ([]string, error
 	return files, nil
 }
 
-func isFileLocked(filePath string) bool {
+func (fu *FsUtils) isFileLocked(filePath string) bool {
 	// Create a flock instance for the given file
-	fileLock := flock.New(filePath)
+	fileLock := fu.fileLockerFactory.GetInstance(filePath)
 
 	// Try to acquire an exclusive (blocking) lock on the file
+
 	locked, err := fileLock.TryLock()
 	if err != nil {
-		// If there was an error trying to lock the file, report it
+		// If there was an error trying to lock the file, to stay safe we consider it as locked
 		fmt.Println("Error trying to lock file:", err)
-		return false
+		return true
 	}
 
 	// If locked is true, that means the file was locked successfully
@@ -103,7 +115,7 @@ func isFileLocked(filePath string) bool {
 }
 
 // RemoveEmptyDirs deletes directories that do not contain .EML files and have not been modified since the threshold.
-func RemoveEmptyDirs(dir string, threshold time.Time) error {
+func (fu *FsUtils) RemoveEmptyDirs(dir string, threshold time.Time) error {
 	emptyDirs, err := findEmptyDirs(dir, threshold)
 	if err != nil {
 		return err

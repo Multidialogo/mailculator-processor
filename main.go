@@ -95,7 +95,7 @@ func main() {
 
 					log.Print("INFO", fmt.Sprintf("Processing: %s", outboxRelativePath))
 
-					err, result := container.FileProcessor.SendRawEmail(outboxFilePath)
+					result, err := container.FileProcessor.SendRawEmail(outboxFilePath)
 					var destPath string = filepath.Join(basePath, strings.Replace(outboxRelativePath, "/outbox", "", -1))
 					if err != nil {
 						log.Print("CRITICAL", fmt.Sprintf("Error processing outboxFilePath %s: %v", outboxFilePath, err))

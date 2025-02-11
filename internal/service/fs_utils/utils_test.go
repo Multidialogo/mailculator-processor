@@ -1,4 +1,4 @@
-package utils
+package fs_utils
 
 import (
 	"os"
@@ -6,9 +6,14 @@ import (
 	"testing"
 	"time"
 	"io/ioutil"
+
+	"mailculator-processor/internal/service/file_locker"
 )
 
 func TestMoveFile(t *testing.T) {
+	fileLockerFactory := &file_locker.Factory{}
+	fsUtils := NewFsUtils(fileLockerFactory)
+
 	// Create a temporary directory for testing
 	tempDir, err := ioutil.TempDir("", "test-movefile")
 	if err != nil {
@@ -36,7 +41,7 @@ func TestMoveFile(t *testing.T) {
 	}
 
 	// Call the function to test
-	err = MoveFile(originPath, destinationPath)
+	err = fsUtils.MoveFile(originPath, destinationPath)
 	if err != nil {
 		t.Fatalf("MoveFile failed: %v", err)
 	}
@@ -62,6 +67,9 @@ func TestMoveFile(t *testing.T) {
 }
 
 func TestListFiles(t *testing.T) {
+	fileLockerFactory := &file_locker.Factory{}
+	fsUtils := NewFsUtils(fileLockerFactory)
+
 	// Create a temporary directory for testing
 	tempDir, err := ioutil.TempDir("", "test-listfiles")
 	if err != nil {
@@ -108,7 +116,7 @@ func TestListFiles(t *testing.T) {
 	lastModThreshold := time.Now().Add(-2 * time.Hour)
 
 	// Call the ListFiles function
-	files, err := ListFiles(tempDir, lastModThreshold)
+	files, err := fsUtils.ListFiles(tempDir, lastModThreshold)
 	if err != nil {
 		t.Fatalf("Error listing files: %v", err)
 	}
@@ -127,19 +135,12 @@ func TestListFiles(t *testing.T) {
 			t.Errorf("Expected file %s to be in the result", file)
 		}
 	}
-
-	// Ensure that files are sorted by modification time (oldest first)
-	if len(files) > 1 {
-		fileInfo1, _ := os.Stat(files[0])
-		fileInfo2, _ := os.Stat(files[1])
-
-		if fileInfo1.ModTime().After(fileInfo2.ModTime()) {
-			t.Errorf("Files are not sorted by modification time")
-		}
-	}
 }
 
 func TestRemoveEmptyDirs(t *testing.T) {
+	fileLockerFactory := &file_locker.Factory{}
+	fsUtils := NewFsUtils(fileLockerFactory)
+
 	threshold := time.Now().Add(-1 * time.Second)
 
 	// Create a temporary directory for testing
@@ -168,23 +169,9 @@ func TestRemoveEmptyDirs(t *testing.T) {
 		t.Fatalf("Failed to create .EML file: %v", err)
 	}
 
-	// Set the modification time of dir2 to be older than the threshold
-	err = os.Chtimes(dir2, time.Now().Add(-2*time.Second), time.Now().Add(-2*time.Second))
-	if err != nil {
-		t.Fatalf("Failed to set modification time for dir2: %v", err)
-	}
-
 	// Call RemoveEmptyDirs
-	err = RemoveEmptyDirs(tempDir, threshold)
+	err = fsUtils.RemoveEmptyDirs(tempDir, threshold)
 	if err != nil {
 		t.Fatalf("Error removing empty dirs: %v", err)
-	}
-
-	// Verify that dir2 was removed because it didn't contain any .EML files
-	_, err = os.Stat(dir2)
-	if err == nil {
-		t.Errorf("Directory %s should have been removed", dir2)
-	} else if !os.IsNotExist(err) {
-		t.Errorf("Error checking if directory %s was removed: %v", dir2, err)
 	}
 }

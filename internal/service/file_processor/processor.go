@@ -2,6 +2,7 @@ package file_processor
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"mailculator-processor/internal/service/email_client"
@@ -20,47 +21,42 @@ func NewFileProcessor(emailClient email_client.EmailClient, fileLockerFactory *f
 	}
 }
 
-func (fp *FileProcessor) SendRawEmail(filePath string) (error, *email_client.RawEmailOutput) {
-	// Create a flock instance for the lock file
+func (fp *FileProcessor) SendRawEmail(filePath string) (*email_client.RawEmailOutput, error) {
+	// Ensure file exists before proceeding
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("file does not exist: %s", filePath)
+	}
+
+	// Create and attempt to acquire file lock
 	lock := fp.fileLockerFactory.GetInstance(filePath)
-
-	// Try to acquire an exclusive lock on the file
-	locked, err := lock.TryLock()
-	if err != nil {
-		// If an error occurred, print it
-		return fmt.Errorf("Error locking file: %v", err), nil
+	locked, lockErr := lock.TryLock()
+	if lockErr != nil {
+		return nil, fmt.Errorf("error locking file: %w", lockErr)
 	}
-
-	// If the file is locked, skip processing
 	if !locked {
-		return fmt.Errorf("File locked: %v", err), nil
+		return nil, fmt.Errorf("file is already locked: %s", filePath)
 	}
+	// Ensure the lock is released when the function exits
+	defer lock.Unlock()
 
 	// Open the .EML file
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open EML file: %v", err), nil
+	file, openErr := os.Open(filePath)
+	if openErr != nil {
+		return nil, fmt.Errorf("failed to open EML file: %w", openErr)
 	}
 	defer file.Close()
 
-	// Read the file content into a byte slice
-	emlContent, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read EML file: %v", err), nil
-	}
-
-	// Prepare the input for the raw email client
-	input := &email_client.RawEmailInput{
-		Data: emlContent,
+	// Read file contents efficiently
+	emlContent, readErr := io.ReadAll(file)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read EML file: %w", readErr)
 	}
 
 	// Send the email using the provided client
-	result, err := fp.emailClient.SendRawEmail(input)
-	if err != nil {
-		return fmt.Errorf("failed to send email: %v", err), nil
+	result, sendErr := fp.emailClient.SendRawEmail(&email_client.RawEmailInput{Data: emlContent})
+	if sendErr != nil {
+		return nil, fmt.Errorf("failed to send email: %w", sendErr)
 	}
 
-	lock.Unlock()
-
-	return nil, result
+	return result, nil
 }

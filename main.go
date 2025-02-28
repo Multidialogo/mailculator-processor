@@ -22,8 +22,8 @@ func init() {
 		panic(fmt.Sprintf("failed to create container: %v", err))
 	}
 
-	if _, err := os.Stat(container.GetString("outboxBasePath")); os.IsNotExist(err) {
-		err = os.MkdirAll(container.GetString("outboxBasePath"), os.ModePerm)
+	if _, err := os.Stat(container.Config.OutboxBasePath); os.IsNotExist(err) {
+		err = os.MkdirAll(container.Config.OutboxBasePath, os.ModePerm)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create directory: %v", err))
 		}
@@ -32,11 +32,11 @@ func init() {
 
 func main() {
 	var log = logger.NewLogger()
-	var basePath = container.GetString("basePath")
-	var outboxBasePath = container.GetString("outboxBasePath")
-	var sleepTime = container.GetDuration("sleepTime")
-	var lastModTime = container.GetDuration("lastModTime")
-	var considerEmptyAfterTime = container.GetDuration("considerEmptyAfterTime")
+	var basePath = container.Config.BasePath
+	var outboxBasePath = container.Config.OutboxBasePath
+	var sleepTime = container.Config.SleepTime
+	var lastModTime = container.Config.LastModTime
+	var considerEmptyAfterTime = container.Config.ConsiderEmptyAfterTime
 	var cycles int = 0
 
 	// Main loop to process files periodically

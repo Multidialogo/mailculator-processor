@@ -1,24 +1,57 @@
 volumes:
-  go-deps:
+  mailculator-processor-go-deps:
+  mailculator-processor-db:
 
 services:
   develop:
-    container_name: pippo
+    profiles:
+      - "develop"
+    container_name: mailculator_processor_develop_app
     image: golang:1.24-alpine
     working_dir: /app
     volumes:
-      - go-deps:/go
+      - mailculator-processor-go-deps:/go
       - ..:/app
     command: tail -f /dev/null
     tty: false
+    env_file:
+      - develop.env
+
+  db:
+    profiles:
+      - "develop"
+      - "migrations"
+    container_name: mailculator_processor_develop_db
+    image: mysql:8.4
     environment:
-      ENV: $ENV
-      APP_DATA_PATH: $APP_DATA_PATH
-      OUTBOX_PATH: $OUTBOX_PATH 
-      #CHECK_INTERVAL: $CHECK_INTERVAL # Not needed at the moment
-      #LAST_MOD_INTERVAL: $LAST_MOD_INTERVAL # Not needed at the moment
-      #EMPTY_DIR_INTERVAL: $EMPTY_DIR_INTERVAL # Not needed at the moment
-      #PROMETHEUS_PORT: $PROMETHEUS_PORT # Not needed at the moment
-      #AWS_ACCESS_KEY_ID: "your-access-key-id"
-      #AWS_SECRET_ACCESS_KEY: "your-secret-access-key"
-      #AWS_REGION: "your-region"
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=mailculator
+      - MYSQL_USER=user
+      - MYSQL_USER=pass
+    volumes:
+      - mailculator-processor-db:/var/lib/mysql
+    ports:
+      - '127.0.0.1:3306:33060'
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+
+  migrations:
+    profiles:
+      - "migrations"
+    container_name: mailculator_processor_develop_db_migrations
+    image: ghcr.io/amacneil/dbmate
+    environment:
+      - DATABASE_URL=mysql://user:pass@127.0.0.1:3306/mailculator
+      - DBMATE_WAIT_TIMEOUT=15s
+    restart: no
+    volumes:
+      - '../db/migrations:/db/migrations'
+    network_mode: host
+    command: --wait migrate
+
+  locks-storage:
+    profiles:
+      - "develop"
+    container_name: mailculator_processor_develop_locks_storage
+    image: valkey/valkey:alpine
+    restart: unless-stopped

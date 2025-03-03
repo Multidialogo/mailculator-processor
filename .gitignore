@@ -1,4 +1,1 @@
-.env.prod.dist
-data/users/*
-data/maildir/outbox/*
-!data/maildir/outbox/.gitkeep
+!*/.gitkeep

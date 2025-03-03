@@ -1,0 +1,24 @@
+volumes:
+  go-deps:
+
+services:
+  develop:
+    container_name: pippo
+    image: golang:1.24-alpine
+    working_dir: /app
+    volumes:
+      - go-deps:/go
+      - ..:/app
+    command: tail -f /dev/null
+    tty: false
+    environment:
+      ENV: $ENV
+      APP_DATA_PATH: $APP_DATA_PATH
+      OUTBOX_PATH: $OUTBOX_PATH 
+      #CHECK_INTERVAL: $CHECK_INTERVAL # Not needed at the moment
+      #LAST_MOD_INTERVAL: $LAST_MOD_INTERVAL # Not needed at the moment
+      #EMPTY_DIR_INTERVAL: $EMPTY_DIR_INTERVAL # Not needed at the moment
+      #PROMETHEUS_PORT: $PROMETHEUS_PORT # Not needed at the moment
+      #AWS_ACCESS_KEY_ID: "your-access-key-id"
+      #AWS_SECRET_ACCESS_KEY: "your-secret-access-key"
+      #AWS_REGION: "your-region"

@@ -3,7 +3,7 @@ FROM golang:1.23 AS mailculatorp-builder
 RUN mkdir -p /usr/local/go/src/mailculator-processor
 WORKDIR /usr/local/go/src/mailculator-processor
 COPY . .
-COPY .env.test /usr/local/go/src/mailculato-processorr/.env
+COPY local/test.env /usr/local/go/src/mailculato-processorr/.env
 RUN go mod tidy
 RUN go mod download
 RUN go test ./...
@@ -15,7 +15,7 @@ RUN chmod +x /usr/local/bin/mailculator-processor/daemon
 FROM golang:1.23 AS mailculatorp-dev
 WORKDIR /usr/local/go/src/mailculator-processor
 COPY . .
-COPY .env.dev /usr/local/go/src/mailculator-processor/.env
+COPY local/develop.env /usr/local/go/src/mailculator-processor/.env
 RUN go mod tidy
 RUN go mod download
 EXPOSE 8080

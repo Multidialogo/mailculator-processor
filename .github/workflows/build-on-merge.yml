@@ -33,8 +33,8 @@ jobs:
             ${{ runner.os }}-go-
 
       # Step 4: Run tests
-      - name: Copy .env.test to the correct location
-        run: cp .env.test /home/runner/work/mailculator-processor/mailculator-processor/.env
+      - name: Copy test.env to the correct location
+        run: cp test.env /home/runner/work/mailculator-processor/mailculator-processor/.env
 
       - name: Run tests
         run: |

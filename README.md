@@ -3,14 +3,18 @@
 
 ## Provisioning
 
-### How to start local development environment
+### How to start/stop local development environment
 
 ```bash
-docker compose -f ./local/compose.yml --profile develop up -d
+/bin/sh ./local/start-local-env.sh
 ```
 
-### Run migrations
+```bash
+/bin/sh ./local/stop-local-env.sh
+```
+
+### Run tests locally
 
 ```bash
-docker compose -f ./local/compose.yml --profile migrations run --rm
+/bin/sh ./local/test.sh
 ```

@@ -1,0 +1,59 @@
+networks:
+  mailculator-processor-local-net:
+
+volumes:
+  mailculator-processor-go-deps:
+
+services:
+  app:
+    profiles:
+      - "develop"
+    container_name: mailculator_processor_develop_app
+    image: golang:1.23-alpine
+    working_dir: /app
+    env_file:
+      - app/develop.env
+    volumes:
+      - mailculator-processor-go-deps:/go
+      - ../..:/app
+    command: tail -f /dev/null
+    tty: false
+    networks:
+      - mailculator-processor-local-net
+
+  db:
+    profiles:
+      - "develop"
+      - "init-db"
+    container_name: mailculator_processor_develop_db
+    image: amazon/dynamodb-local
+    env_file:
+      - db/develop.env
+    healthcheck:
+      test: ["CMD-SHELL", 'if [ "$(curl -s -o /dev/null -I -w ''%{http_code}'' http://localhost:8000)" == "400" ]; then exit 0; else exit 1; fi']
+      interval: 1s
+      timeout: 1s
+      retries: 10
+    ports:
+      - '127.0.0.1:8001:8000'
+    networks:
+      - mailculator-processor-local-net
+
+  init-db:
+    profiles:
+      - "init-db"
+    container_name: mailculator_processor_develop_init_db
+    image: amazon/aws-cli
+    environment:
+      - AWS_REGION=local
+      - AWS_ACCESS_KEY_ID=id
+      - AWS_SECRET_ACCESS_KEY=key
+    volumes:
+      - ./init-db:/scripts
+    entrypoint: sh
+    command: /scripts/init-db.sh
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - mailculator-processor-local-net

@@ -11,22 +11,24 @@ import (
 	"time"
 )
 
-func newDaemonRunMockFuncWithTimeout() (func(context.Context, *config.Container), context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	return func(_ context.Context, container *config.Container) {
+func newDaemonRunMockFuncWithTimeout(wrapperCtx context.Context) func(context.Context, *config.Container) {
+	return func(ctx context.Context, container *config.Container) {
+		ctx, cancel := context.WithTimeout(wrapperCtx, 5*time.Second)
+		defer cancel()
 		daemon.Run(ctx, container)
-	}, cancel
+	}
 }
 
 func TestMainWillGracefullyShutdownWhenSigtermSignal(t *testing.T) {
 	// a timeout is needed to ensure function will stop even if sigterm does not work
-	daemonRunMockFunc, cancel := newDaemonRunMockFuncWithTimeout()
+	contextWithTimeout, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	daemonRunFunc = daemonRunMockFunc
+	daemonRunFunc = newDaemonRunMockFuncWithTimeout(contextWithTimeout)
 	go sendSigtermSignalInOneSecond(t)
 
 	assert.NotPanics(t, main)
+	assert.Nil(t, contextWithTimeout.Err())
 }
 
 func sendSigtermSignalInOneSecond(t *testing.T) {

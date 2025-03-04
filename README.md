@@ -1,7 +1,13 @@
 
 # MultiDialogo - MailCulator Processor
 
-## Provisioning
+## Requirements
+
+- docker
+- docker compose v2
+- git
+
+## Scripts
 
 ### How to start/stop local development environment
 

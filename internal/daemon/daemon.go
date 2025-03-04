@@ -1,36 +1,25 @@
-package main
+package daemon
 
 import (
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
-	"strings"
+	"context"
 	"fmt"
-
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/service/logger"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 )
 
-var container *config.Container
-
-func init() {
-	var err error
-
-	container, err = config.NewContainer()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create container: %v", err))
-	}
-
+func Run(ctx context.Context, container *config.Container) {
 	if _, err := os.Stat(container.Config.OutboxBasePath); os.IsNotExist(err) {
 		err = os.MkdirAll(container.Config.OutboxBasePath, os.ModePerm)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create directory: %v", err))
 		}
 	}
-}
 
-func main() {
 	var log = logger.NewLogger()
 	var basePath = container.Config.BasePath
 	var outboxBasePath = container.Config.OutboxBasePath
@@ -41,6 +30,10 @@ func main() {
 
 	// Main loop to process files periodically
 	for {
+		if checkContextDone(ctx) {
+			return
+		}
+
 		// Record memory and CPU usage at the start
 		err := container.Metrics.CollectMemoryAndCpu()
 		if err != nil {
@@ -126,5 +119,14 @@ func main() {
 		if err != nil {
 			log.Print("CRITICAL", fmt.Sprintf("%v", err))
 		}
+	}
+}
+
+func checkContextDone(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
 	}
 }

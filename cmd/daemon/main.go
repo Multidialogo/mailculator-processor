@@ -2,23 +2,30 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/daemon"
+	"mailculator-processor/internal/email"
 	"os/signal"
 	"syscall"
 )
 
-var daemonRunFunc = daemon.Run
+var conf = config.NewConfig()
+
+var runner = runnerFactory()
 
 func main() {
-	container, err := config.NewContainer()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create container: %v", err))
-	}
-
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer cancel()
+	runner(ctx)
+}
 
-	daemonRunFunc(ctx, container)
+func runnerFactory() func(context.Context) {
+	dynamodbClient := dynamodb.NewFromConfig(conf.Aws.DynamoDb)
+	emailLocker := email.NewLocker(dynamodbClient, conf.Outbox.LockTableName)
+	emailFinder := email.NewFinder(emailLocker, dynamodbClient, conf.Outbox.OutboxTableName)
+	emailSender := email.NewSESSender(conf.Aws.DynamoDb)
+
+	d := daemon.NewDaemon(emailFinder, emailSender)
+	return d.RunUntilContextDone
 }

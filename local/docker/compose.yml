@@ -46,8 +46,8 @@ services:
     image: amazon/aws-cli
     environment:
       - AWS_REGION=local
-      - AWS_ACCESS_KEY_ID=id
-      - AWS_SECRET_ACCESS_KEY=key
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
     volumes:
       - ./init-db:/scripts
     entrypoint: sh

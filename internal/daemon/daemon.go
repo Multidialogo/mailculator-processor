@@ -7,23 +7,18 @@ import (
 	"sync"
 )
 
-type EmailFinder interface {
-	FindAndLock() ([]email.Email, error)
-}
-
-type EmailSender interface {
+type emailService interface {
+	LockAndReturnReadyToProcess(ctx context.Context) ([]email.Email, error)
 	SendAndUnlock(context.Context, email.Email) error
 }
 
 type Daemon struct {
-	finder    EmailFinder
-	processor EmailSender
+	emailService emailService
 }
 
-func NewDaemon(finder EmailFinder, processor EmailSender) *Daemon {
+func NewDaemon(service emailService) *Daemon {
 	return &Daemon{
-		finder:    finder,
-		processor: processor,
+		emailService: service,
 	}
 }
 
@@ -39,7 +34,7 @@ func (daemon Daemon) RunUntilContextDone(ctx context.Context) {
 }
 
 func (daemon Daemon) run(ctx context.Context) {
-	emails, err := daemon.finder.FindAndLock()
+	emails, err := daemon.emailService.LockAndReturnReadyToProcess(ctx)
 	if err != nil {
 		log.Print(err.Error())
 		return
@@ -53,7 +48,7 @@ func (daemon Daemon) run(ctx context.Context) {
 		go func(wg *sync.WaitGroup, email email.Email) {
 			defer wg.Done()
 
-			err := daemon.processor.SendAndUnlock(ctx, email)
+			err := daemon.emailService.SendAndUnlock(ctx, email)
 			if err != nil {
 				log.Print(err.Error())
 			}

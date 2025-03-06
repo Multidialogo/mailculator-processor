@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.7.73
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
 	github.com/aws/aws-sdk-go-v2/service/ses v1.29.7
-	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
 )
 

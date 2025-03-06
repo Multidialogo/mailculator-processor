@@ -7,31 +7,18 @@ import (
 )
 
 type Config struct {
-	Aws    AwsConfig
-	Outbox OutboxConfig
+	Aws AwsConfig
 }
 
 func NewConfig() *Config {
 	return &Config{
-		Aws:    *newAwsConfig(),
-		Outbox: *newOutboxConfig(),
-	}
-}
-
-type OutboxConfig struct {
-	OutboxTableName string
-	LockTableName   string
-}
-
-func newOutboxConfig() *OutboxConfig {
-	return &OutboxConfig{
-		OutboxTableName: "Outbox",
-		LockTableName:   "OutboxLock",
+		Aws: *newAwsConfig(),
 	}
 }
 
 type AwsConfig struct {
 	DynamoDb aws.Config
+	Ses      aws.Config
 }
 
 func newAwsConfig() *AwsConfig {
@@ -46,6 +33,11 @@ func newAwsConfig() *AwsConfig {
 			Region:       os.Getenv("AWS_REGION"),
 			Credentials:  awsCredentials,
 			BaseEndpoint: aws.String(os.Getenv("AWS_DYNAMODB_ENDPOINT")),
+		},
+		Ses: aws.Config{
+			Region:       os.Getenv("AWS_REGION"),
+			Credentials:  awsCredentials,
+			BaseEndpoint: aws.String(os.Getenv("AWS_SES_ENDPOINT")),
 		},
 	}
 }

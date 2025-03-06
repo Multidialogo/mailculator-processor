@@ -21,39 +21,18 @@ services:
     networks:
       - mailculator-processor-local-net
 
-  db:
+  localstack:
     profiles:
       - "develop"
-      - "init-db"
-    container_name: mailculator_processor_develop_db
-    image: amazon/dynamodb-local
-    env_file:
-      - db/develop.env
-    healthcheck:
-      test: ["CMD-SHELL", 'if [ "$(curl -s -o /dev/null -I -w ''%{http_code}'' http://localhost:8000)" == "400" ]; then exit 0; else exit 1; fi']
-      interval: 1s
-      timeout: 1s
-      retries: 10
+    container_name: mailculator_processor_develop_localstack
+    image: localstack/localstack
     ports:
-      - '127.0.0.1:8001:8000'
-    networks:
-      - mailculator-processor-local-net
-
-  init-db:
-    profiles:
-      - "init-db"
-    container_name: mailculator_processor_develop_init_db
-    image: amazon/aws-cli
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      - AWS_REGION=local
-      - AWS_ACCESS_KEY_ID=local
-      - AWS_SECRET_ACCESS_KEY=local
+      - DEBUG=${DEBUG:-0}
     volumes:
-      - ./init-db:/scripts
-    entrypoint: sh
-    command: /scripts/init-db.sh
-    depends_on:
-      db:
-        condition: service_healthy
+      - ./localstack:/etc/localstack/init/ready.d
+      - /var/run/docker.sock:/var/run/docker.sock"
     networks:
       - mailculator-processor-local-net

@@ -73,7 +73,10 @@ func (f *ClientFactory) New() (*Client, error) {
 		return nil, errors.New("smtp: server doesn't support STARTTLS")
 	}
 
-	tlsCfg := &tls.Config{InsecureSkipVerify: f.cfg.AllowInsecureTls}
+	tlsCfg := &tls.Config{
+		ServerName:         f.cfg.Host,
+		InsecureSkipVerify: f.cfg.AllowInsecureTls,
+	}
 
 	if err = c.StartTLS(tlsCfg); err != nil {
 		return nil, err

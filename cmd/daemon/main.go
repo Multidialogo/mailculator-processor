@@ -6,6 +6,7 @@ import (
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/daemon"
 	"mailculator-processor/internal/email"
+	"mailculator-processor/internal/shellexec"
 	"os/signal"
 	"syscall"
 )
@@ -24,8 +25,8 @@ func runnerFactory() func(context.Context) {
 	dynamodbClient := dynamodb.NewFromConfig(cfg.Aws.DynamoDb)
 	emailService := email.NewService(dynamodbClient)
 	smtpClientFactory := email.NewClientFactory(cfg.Smtp)
-	callbackExecutor := email.NewCallbackExecutor()
+	shellCommandFactory := shellexec.NewCommandFactory()
 
-	d := daemon.NewDaemon(emailService, callbackExecutor, smtpClientFactory)
+	d := daemon.NewDaemon(emailService, smtpClientFactory, shellCommandFactory)
 	return d.RunUntilContextDone
 }

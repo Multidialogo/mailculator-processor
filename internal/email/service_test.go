@@ -29,27 +29,39 @@ func (suite *ServiceTestSuite) SetupTest() {
 }
 
 func (suite *ServiceTestSuite) TearDownTest() {
-	query := fmt.Sprintf("DELETE FROM \"%v\" WHERE id=?", tableName)
+	outboxQuery := fmt.Sprintf("DELETE FROM \"%v\" WHERE id=?", tableName)
+	outboxLockQuery := fmt.Sprintf("DELETE FROM \"%v\" WHERE id=?", tableName)
 
 	for _, id := range suite.insertedIds {
 		params, err := attributevalue.MarshalList([]interface{}{id})
 		if err != nil {
 			log.Println("error marshalling inserted id", err)
+			continue
 		}
 
 		stmt := &dynamodb.ExecuteStatementInput{
-			Statement:  aws.String(query),
+			Statement:  aws.String(outboxQuery),
 			Parameters: params,
 		}
 
-		_, err = suite.db.ExecuteStatement(context.TODO(), stmt)
-		if err != nil {
+		if _, err = suite.db.ExecuteStatement(context.TODO(), stmt); err != nil {
 			log.Println("error deleting inserted email", err)
+			continue
+		}
+
+		stmt = &dynamodb.ExecuteStatementInput{
+			Statement:  aws.String(outboxLockQuery),
+			Parameters: params,
+		}
+
+		if _, err = suite.db.ExecuteStatement(context.TODO(), stmt); err != nil {
+			log.Println("error deleting inserted lock", err)
+			continue
 		}
 	}
 }
 
-func (suite *ServiceTestSuite) insert(email Email) error {
+func (suite *ServiceTestSuite) insertFixture(email Email) error {
 	query := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'id': ?, 'attributes': ?}", tableName)
 
 	marshaller := &emailMarshaller{}
@@ -63,8 +75,7 @@ func (suite *ServiceTestSuite) insert(email Email) error {
 		Parameters: []types.AttributeValue{params["id"], params["attributes"]},
 	}
 
-	_, err = suite.db.ExecuteStatement(context.TODO(), stmt)
-	if err != nil {
+	if _, err = suite.db.ExecuteStatement(context.TODO(), stmt); err != nil {
 		return err
 	}
 
@@ -72,22 +83,67 @@ func (suite *ServiceTestSuite) insert(email Email) error {
 	return nil
 }
 
-func (suite *ServiceTestSuite) TestFindReadyIntegration() {
-	email := Email{
-		Id:              "fake-id",
-		Status:          "READY",
-		EmlFilePath:     "testdata/large.EML",
-		SuccessCallback: "/success",
-		FailureCallback: "/failure",
+func (suite *ServiceTestSuite) Test_FindReady_Integration() {
+	fixtures := []Email{
+		{
+			Id:              "fake-id-0",
+			Status:          "",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/0",
+			FailureCallback: "echo /failure/0",
+		},
+		{
+			Id:              "fake-id-1",
+			Status:          "READY",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/1",
+			FailureCallback: "echo /failure/1",
+		},
+		{
+			Id:              "fake-id-2",
+			Status:          "SENT",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/2",
+			FailureCallback: "echo /failure/2",
+		},
+		{
+			Id:              "fake-id-3",
+			Status:          "SENT-ACK",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/3",
+			FailureCallback: "echo /failure/3",
+		},
+		{
+			Id:              "fake-id-4",
+			Status:          "FAILED",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/4",
+			FailureCallback: "echo /failure/4",
+		},
+		{
+			Id:              "fake-id-5",
+			Status:          "FAILED-ACK",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/5",
+			FailureCallback: "echo /failure/5",
+		},
+		{
+			Id:              "fake-id-6",
+			Status:          "READY",
+			EmlFilePath:     "testdata/none.EML",
+			SuccessCallback: "echo /success/6",
+			FailureCallback: "echo /failure/6",
+		},
 	}
 
-	err := suite.insert(email)
-	suite.Require().NoError(err)
+	for _, fixture := range fixtures {
+		err := suite.insertFixture(fixture)
+		suite.Require().NoError(err)
+	}
 
 	sut := NewService(suite.db)
 	found, err := sut.FindReady(context.TODO())
 
 	suite.Require().NoError(err)
-	suite.Assert().Len(suite.insertedIds, 1)
-	suite.Assert().Len(found, 1)
+	suite.Assert().ElementsMatch([]Email{fixtures[1], fixtures[6]}, found)
 }

@@ -22,7 +22,7 @@ func NewService(db *dynamodb.Client) *Service {
 }
 
 func (s *Service) FindReady(ctx context.Context) ([]Email, error) {
-	query := fmt.Sprintf("SELECT id, attributes FROM \"%v\"", tableName)
+	query := fmt.Sprintf("SELECT id, attributes FROM \"%v\" WHERE attributes.status = 'READY'", tableName)
 
 	stmt := &dynamodb.ExecuteStatementInput{
 		Statement: aws.String(query),
@@ -83,36 +83,4 @@ func (s *Service) BatchLock(ctx context.Context, emails []Email) ([]Email, error
 	}
 
 	return acquired, nil
-}
-
-func (s *Service) Unlock(ctx context.Context, id int) error {
-	query := fmt.Sprintf("DELETE FROM \"%v\" WHERE id=?", lockTableName)
-
-	params, err := attributevalue.MarshalList([]interface{}{id})
-	if err != nil {
-		return err
-	}
-
-	stmt := &dynamodb.ExecuteStatementInput{
-		Statement:  aws.String(query),
-		Parameters: params,
-	}
-
-	_, err = s.db.ExecuteStatement(ctx, stmt)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type CallbackExecutor struct{}
-
-func NewCallbackExecutor() *CallbackExecutor {
-	return &CallbackExecutor{}
-}
-
-func (e *CallbackExecutor) Execute(ctx context.Context, callback string) error {
-	// TODO Implement
-	return nil
 }

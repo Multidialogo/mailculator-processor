@@ -13,10 +13,6 @@ type emailService interface {
 	BatchLock(context.Context, []email.Email) ([]email.Email, error)
 }
 
-type callbackExecutor interface {
-	Execute(context.Context, string) error
-}
-
 type emailClient interface {
 	Send(email.Email) (bool, error)
 	Close()
@@ -26,21 +22,29 @@ type emailClientFactory[T emailClient] interface {
 	New() (T, error)
 }
 
-type Daemon[T emailClient] struct {
-	service          emailService
-	callbackExecutor callbackExecutor
-	clientFactory    emailClientFactory[T]
+type shellCommand interface {
+	Execute() error
 }
 
-func NewDaemon[T emailClient](service emailService, callbackExecutor callbackExecutor, clientFactory emailClientFactory[T]) *Daemon[T] {
-	return &Daemon[T]{
-		service:          service,
-		callbackExecutor: callbackExecutor,
-		clientFactory:    clientFactory,
+type shellCommandFactory[T shellCommand] interface {
+	New(string) T
+}
+
+type Daemon[E emailClient, S shellCommand] struct {
+	service             emailService
+	clientFactory       emailClientFactory[E]
+	shellCommandFactory shellCommandFactory[S]
+}
+
+func NewDaemon[E emailClient, S shellCommand](es emailService, ecf emailClientFactory[E], scf shellCommandFactory[S]) *Daemon[E, S] {
+	return &Daemon[E, S]{
+		service:             es,
+		clientFactory:       ecf,
+		shellCommandFactory: scf,
 	}
 }
 
-func (d *Daemon[T]) RunUntilContextDone(ctx context.Context) {
+func (d *Daemon[E, S]) RunUntilContextDone(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -51,7 +55,7 @@ func (d *Daemon[T]) RunUntilContextDone(ctx context.Context) {
 	}
 }
 
-func (d *Daemon[T]) runSingleIteration(ctx context.Context) {
+func (d *Daemon[E, S]) runSingleIteration(ctx context.Context) {
 	foundEmails, err := d.service.FindReady(ctx)
 	if err != nil {
 		log.Print(err.Error())
@@ -96,40 +100,36 @@ func (d *Daemon[T]) runSingleIteration(ctx context.Context) {
 	wg.Wait()
 }
 
-func (d *Daemon[T]) handleSuccess(ctx context.Context, email email.Email) {
-	updErr := d.service.UpdateStatus(ctx, email.Id, "SENT")
-	if updErr != nil {
+func (d *Daemon[E, S]) handleSuccess(ctx context.Context, email email.Email) {
+	if updErr := d.service.UpdateStatus(ctx, email.Id, "SENT"); updErr != nil {
 		log.Print(updErr.Error())
 		return
 	}
 
-	callErr := d.callbackExecutor.Execute(ctx, email.SuccessCallback)
-	if callErr != nil {
-		log.Print(callErr.Error())
+	cmd := d.shellCommandFactory.New(email.SuccessCallback)
+	if cmdErr := cmd.Execute(); cmdErr != nil {
+		log.Print(cmdErr.Error())
 		return
 	}
 
-	updErr = d.service.UpdateStatus(ctx, email.Id, "SENT-ACK")
-	if updErr != nil {
+	if updErr := d.service.UpdateStatus(ctx, email.Id, "SENT-ACK"); updErr != nil {
 		log.Print(updErr.Error())
 	}
 }
 
-func (d *Daemon[T]) handleFailure(ctx context.Context, email email.Email) {
-	updErr := d.service.UpdateStatus(ctx, email.Id, "FAILED")
-	if updErr != nil {
+func (d *Daemon[E, S]) handleFailure(ctx context.Context, email email.Email) {
+	if updErr := d.service.UpdateStatus(ctx, email.Id, "FAILED"); updErr != nil {
 		log.Print(updErr.Error())
 		return
 	}
 
-	callErr := d.callbackExecutor.Execute(ctx, email.FailureCallback)
-	if callErr != nil {
-		log.Print(callErr.Error())
+	cmd := d.shellCommandFactory.New(email.FailureCallback)
+	if cmdErr := cmd.Execute(); cmdErr != nil {
+		log.Print(cmdErr.Error())
 		return
 	}
 
-	updErr = d.service.UpdateStatus(ctx, email.Id, "FAILED-ACK")
-	if updErr != nil {
+	if updErr := d.service.UpdateStatus(ctx, email.Id, "FAILED-ACK"); updErr != nil {
 		log.Print(updErr.Error())
 	}
 }

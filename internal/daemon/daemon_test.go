@@ -2,7 +2,7 @@ package daemon
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"mailculator-processor/internal/email"
 	"sync"
 	"testing"
@@ -65,28 +65,86 @@ func (f *emailClientMockFactory) New() (*emailClientMock, error) {
 	return f.client, nil
 }
 
-type callbackExecutorMock struct{}
+type shellCommandMock struct {
+	command  string
+	executed bool
+}
 
-func (c *callbackExecutorMock) Execute(_ context.Context, callback string) error {
+func (m *shellCommandMock) Execute() error {
+	m.executed = true
 	return nil
 }
 
-func Test_RunUntilContextDone(t *testing.T) {
+type shellCommandMockFactory struct {
+	mutex        sync.Mutex
+	shellCommand *shellCommandMock
+	created      map[string][]*shellCommandMock
+}
+
+func (m *shellCommandMockFactory) New(command string) *shellCommandMock {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	created := &shellCommandMock{command: command}
+	m.created[command] = append(m.created[command], created)
+	return created
+}
+
+func TestDaemonTestSuite(t *testing.T) {
+	suite.Run(t, &DaemonTestSuite{})
+}
+
+type DaemonTestSuite struct {
+	suite.Suite
+	serviceMock             *emailServiceMock
+	clientMock              *emailClientMock
+	clientMockFactory       *emailClientMockFactory
+	shellCommandMockFactory *shellCommandMockFactory
+}
+
+func (suite *DaemonTestSuite) SetupTest() {
+	suite.serviceMock = &emailServiceMock{pool: []email.Email{}}
+	suite.clientMock = &emailClientMock{}
+	suite.clientMockFactory = &emailClientMockFactory{client: suite.clientMock}
+	suite.shellCommandMockFactory = &shellCommandMockFactory{created: map[string][]*shellCommandMock{}}
+}
+
+func (suite *DaemonTestSuite) Test_RunUntilContextDone_WhenTwoEmailsAreReady_ShouldLockSendAndCallbackTwoEmails() {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	pool := []email.Email{{Id: "1"}, {Id: "2"}}
-	service := &emailServiceMock{pool: pool}
-	client := &emailClientMock{}
-	clientFactory := &emailClientMockFactory{client: client}
-	executor := &callbackExecutorMock{}
+	firstCallback := "echo callback --x"
+	secondCallback := "echo callback --y"
 
-	sut := NewDaemon(service, executor, clientFactory)
+	readyPool := []email.Email{{Id: "1", SuccessCallback: firstCallback}, {Id: "2", SuccessCallback: secondCallback}}
+	suite.serviceMock.pool = readyPool
+
+	sut := NewDaemon(suite.serviceMock, suite.clientMockFactory, suite.shellCommandMockFactory)
 	sut.RunUntilContextDone(ctx)
 
-	assert.Less(t, 2, service.readyCalled)
-	assert.ElementsMatch(t, pool, client.sent)
-	assert.ElementsMatch(t, pool, service.locked)
-	assert.Equal(t, 1, client.closed)
-	assert.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
+	// "ready" must be called many times
+	suite.Assert().True(suite.serviceMock.readyCalled > 2)
+
+	// email in pool should be sent and locked
+	suite.Assert().ElementsMatch(readyPool, suite.clientMock.sent)
+	suite.Assert().ElementsMatch(readyPool, suite.serviceMock.locked)
+
+	// first callback must have been called exactly once
+	_, firstCallbackHasBeenCreated := suite.shellCommandMockFactory.created[firstCallback]
+	suite.Assert().True(firstCallbackHasBeenCreated)
+	if firstCallbackHasBeenCreated && len(suite.shellCommandMockFactory.created[firstCallback]) > 0 {
+		suite.Assert().Len(suite.shellCommandMockFactory.created[firstCallback], 1)
+		suite.Assert().True(suite.shellCommandMockFactory.created[firstCallback][0].executed)
+	}
+
+	// second callback must have been called exactly once
+	_, secondCallbackHasBeenCreated := suite.shellCommandMockFactory.created[secondCallback]
+	suite.Assert().True(secondCallbackHasBeenCreated)
+	if secondCallbackHasBeenCreated && len(suite.shellCommandMockFactory.created[secondCallback]) > 0 {
+		suite.Assert().Len(suite.shellCommandMockFactory.created[secondCallback], 1)
+		suite.Assert().True(suite.shellCommandMockFactory.created[secondCallback][0].executed)
+	}
+
+	// it should stop because of deadline
+	suite.Assert().ErrorIs(ctx.Err(), context.DeadlineExceeded)
 }

@@ -21,6 +21,24 @@ services:
     networks:
       - mailculator-processor-local-net
 
+  smtp:
+    profiles:
+      - "develop"
+    container_name: mailculator_processor_develop_smtp
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    environment:
+      - MP_SMTP_TLS_CERT=/certs/cert.pem
+      - MP_SMTP_TLS_KEY=/certs/key.pem
+      - MP_SMTP_REQUIRE_STARTTLS=true
+      - MP_SMTP_AUTH_ACCEPT_ANY=true
+    volumes:
+      - ./smtp/certs:/certs
+    networks:
+      - mailculator-processor-local-net
+
   localstack:
     profiles:
       - "develop"
@@ -30,7 +48,7 @@ services:
       - "127.0.0.1:4566:4566"
       - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      - DEBUG=${DEBUG:-0}
+      - DEBUG=0
     volumes:
       - ./localstack:/etc/localstack/init/ready.d
       - /var/run/docker.sock:/var/run/docker.sock"

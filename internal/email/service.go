@@ -1,77 +1,118 @@
 package email
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+)
 
-type emailDataMapper interface {
-	FindReady(context.Context) ([]Email, error)
-}
-
-type lockDataMapper interface {
-	BatchInsert(context.Context, []Lock) ([]Lock, error)
-}
-
-type emailClient interface {
-	Send(ctx context.Context, raw []byte) error
-}
+const (
+	tableName     = "Outbox"
+	lockTableName = "OutboxLock"
+)
 
 type Service struct {
-	emailDataMapper emailDataMapper
-	lockDataMapper  lockDataMapper
-	emailClient     emailClient
+	db *dynamodb.Client
 }
 
-func NewService(dataMapper emailDataMapper, lockDataMapper lockDataMapper, emailClient emailClient) *Service {
-	return &Service{
-		emailDataMapper: dataMapper,
-		lockDataMapper:  lockDataMapper,
-		emailClient:     emailClient,
+func NewService(db *dynamodb.Client) *Service {
+	return &Service{db: db}
+}
+
+func (s *Service) FindReady(ctx context.Context) ([]Email, error) {
+	query := fmt.Sprintf("SELECT id, attributes FROM \"%v\"", tableName)
+
+	stmt := &dynamodb.ExecuteStatementInput{
+		Statement: aws.String(query),
 	}
-}
 
-func (s *Service) LockAndReturnReadyToProcess(ctx context.Context) ([]Email, error) {
-	ready, err := s.emailDataMapper.FindReady(ctx)
+	res, err := s.db.ExecuteStatement(ctx, stmt)
 	if err != nil {
-		return nil, err
+		return []Email{}, err
 	}
 
-	var locks []Lock
-	for _, email := range ready {
-		locks = append(locks, Lock{Id: email.Id})
-	}
-
-	locks, err = s.lockDataMapper.BatchInsert(ctx, locks)
+	marshaller := &emailMarshaller{}
+	emails, err := marshaller.UnmarshalListOfMaps(res.Items)
 	if err != nil {
-		return nil, err
+		return []Email{}, err
 	}
 
-	var locked []Email
-	for _, email := range ready {
-		// I do this because go mod tidy cannot fucking import slices
-		ok := false
-		for _, lock := range locks {
-			if email.Id == lock.Id {
-				ok = true
-				continue
-			}
-		}
-
-		if ok {
-			locked = append(locked, email)
-		}
-	}
-
-	return locked, nil
+	return emails, nil
 }
 
-func (s *Service) SendAndUnlock(ctx context.Context, email Email) error {
-	// TODO read raw file from filesystem
-	raw := []byte("TODO implement")
+func (s *Service) UpdateStatus(ctx context.Context, id string, status string) error {
+	query := fmt.Sprintf("UPDATE \"%v\" SET attributes.status=? WHERE id=?", tableName)
 
-	err := s.emailClient.Send(ctx, raw)
+	params, err := attributevalue.MarshalList([]interface{}{status, id})
 	if err != nil {
 		return err
 	}
 
-	// TODO implement unlock
+	stmt := &dynamodb.ExecuteStatementInput{
+		Statement:  aws.String(query),
+		Parameters: params,
+	}
+
+	_, err = s.db.ExecuteStatement(ctx, stmt)
+	return err
+}
+
+func (s *Service) BatchLock(ctx context.Context, emails []Email) ([]Email, error) {
+	query := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'id': ?}", lockTableName)
+
+	var acquired []Email
+	for _, email := range emails {
+		params, err := attributevalue.MarshalList([]interface{}{email.Id})
+		if err != nil {
+			return []Email{}, err
+		}
+
+		stmt := &dynamodb.ExecuteStatementInput{
+			Statement:  aws.String(query),
+			Parameters: params,
+		}
+
+		_, err = s.db.ExecuteStatement(ctx, stmt)
+		if err != nil {
+			return []Email{}, err
+		}
+
+		acquired = append(acquired, email)
+	}
+
+	return acquired, nil
+}
+
+func (s *Service) Unlock(ctx context.Context, id int) error {
+	query := fmt.Sprintf("DELETE FROM \"%v\" WHERE id=?", lockTableName)
+
+	params, err := attributevalue.MarshalList([]interface{}{id})
+	if err != nil {
+		return err
+	}
+
+	stmt := &dynamodb.ExecuteStatementInput{
+		Statement:  aws.String(query),
+		Parameters: params,
+	}
+
+	_, err = s.db.ExecuteStatement(ctx, stmt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type CallbackExecutor struct{}
+
+func NewCallbackExecutor() *CallbackExecutor {
+	return &CallbackExecutor{}
+}
+
+func (e *CallbackExecutor) Execute(ctx context.Context, callback string) error {
+	// TODO Implement
 	return nil
 }

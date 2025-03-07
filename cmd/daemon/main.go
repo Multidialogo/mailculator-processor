@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/ses"
-	"mailculator-processor/internal/awsutils"
 	"mailculator-processor/internal/config"
 	"mailculator-processor/internal/daemon"
 	"mailculator-processor/internal/email"
@@ -21,17 +19,13 @@ func main() {
 }
 
 func runnerFactory() func(context.Context) {
+	// TODO handle errors
 	cfg := config.NewConfig()
-
 	dynamodbClient := dynamodb.NewFromConfig(cfg.Aws.DynamoDb)
-	sesClient := ses.NewFromConfig(cfg.Aws.Ses)
+	emailService := email.NewService(dynamodbClient)
+	smtpClientFactory := email.NewClientFactory(cfg.Smtp)
+	callbackExecutor := email.NewCallbackExecutor()
 
-	emailDataMapper := email.NewDataMapper(dynamodbClient)
-	lockDataMapper := email.NewLockDataMapper(dynamodbClient)
-	emailClient := awsutils.NewSesEmailClient(sesClient)
-
-	emailService := email.NewService(emailDataMapper, lockDataMapper, emailClient)
-
-	d := daemon.NewDaemon(emailService)
+	d := daemon.NewDaemon(emailService, callbackExecutor, smtpClientFactory)
 	return d.RunUntilContextDone
 }

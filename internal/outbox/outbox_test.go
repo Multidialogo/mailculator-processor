@@ -42,7 +42,8 @@ func (suite *OutboxTestSuite) SetupTest() {
 func (suite *OutboxTestSuite) TearDownTest() {
 	query := fmt.Sprintf("SELECT Id, Status FROM \"%v\"", "Outbox")
 	stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query)}
-	res, _ := suite.db.ExecuteStatement(context.TODO(), stmt)
+	res, err := suite.db.ExecuteStatement(context.TODO(), stmt)
+	suite.Require().NoError(err)
 
 	var items []emailItemRow
 	_ = attributevalue.UnmarshalListOfMaps(res.Items, &items)
@@ -52,8 +53,8 @@ func (suite *OutboxTestSuite) TearDownTest() {
 		params, _ := attributevalue.MarshalList([]interface{}{item.Id, item.Status})
 		stmt = &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
 
-		_, err := suite.db.ExecuteStatement(context.TODO(), stmt)
-		suite.Require().NoError(err)
+		_, err = suite.db.ExecuteStatement(context.TODO(), stmt)
+		suite.Assert().NoError(err)
 	}
 }
 
@@ -70,46 +71,54 @@ func (suite *OutboxTestSuite) seeder(index int) Email {
 
 func (suite *OutboxTestSuite) TestMainOutboxQueryInsertUpdateIntegration() {
 	ctx := context.TODO()
+
+	// no record in db, should return 0
 	res, err := suite.sut.Query(ctx, "PENDING", 25)
 	suite.Assert().NoError(err)
 	suite.Assert().Len(res, 0)
 
+	// insert a record in db
 	fx := suite.seeder(0)
 	err = suite.sut.Insert(ctx, fx)
 	suite.Assert().NoError(err)
 
+	// filtering by status PENDING should return 1 record at this point, the same record inserted before
 	res, err = suite.sut.Query(ctx, "PENDING", 25)
 	suite.Assert().Len(res, 1)
 	suite.Assert().Equal(fx.Id, res[0].Id)
 	suite.Assert().Equal("PENDING", res[0].Status)
 
+	// same record already exists, it should return error
 	err = suite.sut.Insert(ctx, fx)
 	suite.Assert().Error(err)
 
-	res, err = suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(fx.Id, res[0].Id)
-	suite.Assert().Equal("PENDING", res[0].Status)
-
+	// filtering by status PROCESSING should return 0 records at this point
 	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
 	suite.Assert().Len(res, 0)
 
+	// update fixture to status PROCESSING
 	err = suite.sut.Update(ctx, fx.Id, "PROCESSING")
 	suite.Assert().NoError(err)
 
+	// filtering by status PENDING should return 0 records at this point
 	res, err = suite.sut.Query(ctx, "PENDING", 25)
 	suite.Assert().Len(res, 0)
 
+	// filtering by status PROCESSING should return 1 records at this point
 	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
 	suite.Assert().Len(res, 1)
 	suite.Assert().Equal(fx.Id, res[0].Id)
 	suite.Assert().Equal("PROCESSING", res[0].Status)
 
+	// item already is in status PROCESSING, so it should return error
 	err = suite.sut.Update(ctx, fx.Id, "PROCESSING")
 	suite.Assert().Error(err)
 
-	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(fx.Id, res[0].Id)
-	suite.Assert().Equal("PROCESSING", res[0].Status)
+	// status cannot be rolled back
+	err = suite.sut.Update(ctx, fx.Id, "PENDING")
+	suite.Assert().Error(err)
+
+	// we shouldn't be able to insert again the same record even if it's status has been updated
+	err = suite.sut.Insert(ctx, fx)
+	suite.Assert().Error(err)
 }

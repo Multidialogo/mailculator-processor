@@ -1,0 +1,24 @@
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start test dependencies
+        run: docker compose -f ./deployments/docker/compose.yml --profile test-deps up -d --build --force-recreate
+
+      - name: Run tests
+        run: docker compose -f ./deployments/docker/compose.yml run --rm test
+
+      - name: Stop test dependencies
+        run: docker compose -f ./deployments/docker/compose.yml --profile test-deps down --remove-orphans -v

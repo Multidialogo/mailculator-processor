@@ -1,0 +1,22 @@
+aws:
+  key: "${AWS_ACCESS_KEY_ID}"
+  secret: "${AWS_SECRET_ACCESS_KEY}"
+  region: "${AWS_REGION}"
+  base_endpoint: "${AWS_BASE_ENDPOINT}"
+
+callbacks:
+  max_retries: 3
+  retry_interval: 5
+
+db:
+  host: "${DB_HOST}"
+
+log:
+  file_path: "/var/log/app/app.log"
+
+smtp:
+  host: "${SMTP_HOST}"
+  port: ${SMTP_PORT}
+  user: "${SMTP_USER}"
+  password: "${SMTP_PASS}"
+  from: "${SMTP_FROM}"

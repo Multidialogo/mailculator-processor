@@ -2,31 +2,35 @@ package main
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"log"
+	"mailculator-processor/internal/app"
 	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/daemon"
-	"mailculator-processor/internal/email"
-	"mailculator-processor/internal/shellexec"
 	"os/signal"
 	"syscall"
 )
 
-var runner = runnerFactory()
+const configFilePath = "../../config/app.yaml"
+
+var runFn = run
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer cancel()
-	runner(ctx)
+	runFn(ctx)
 }
 
-func runnerFactory() func(context.Context) {
-	// TODO handle errors
-	cfg := config.NewConfig()
-	dynamodbClient := dynamodb.NewFromConfig(cfg.Aws.DynamoDb)
-	emailService := email.NewService(dynamodbClient)
-	smtpClientFactory := email.NewClientFactory(cfg.Smtp)
-	shellCommandFactory := shellexec.NewCommandFactory()
+func run(ctx context.Context) {
+	cfg := app.Config{}
+	err := config.NewLoader(configFilePath).Load(&cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	d := daemon.NewDaemon(emailService, smtpClientFactory, shellCommandFactory)
-	return d.RunUntilContextDone
+	runner, err := app.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	runner.Run(ctx)
 }

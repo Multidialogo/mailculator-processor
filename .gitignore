@@ -1,3 +1,5 @@
+deployments/build/out
+
 local/docker/app/log
 
 !*/.gitkeep

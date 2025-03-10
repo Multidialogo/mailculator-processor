@@ -24,3 +24,9 @@
 ```bash
 /bin/sh ./local/test.sh
 ```
+
+### Simulate deployments test
+
+```bash
+/bin/sh ./local/simulate-deployments-test.sh
+```

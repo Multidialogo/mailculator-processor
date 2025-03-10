@@ -1,0 +1,24 @@
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Start dependencies
+        run: ./deployments/start-test-dependencies.sh
+
+      - name: Run tests and build image
+        run: ./deployments/test.sh
+
+      - name: Stop dependencies
+        run: ./deployments/stop-test-dependencies.sh

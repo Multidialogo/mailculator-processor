@@ -2,23 +2,35 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
+	"mailculator-processor/internal/app"
 	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/daemon"
 	"os/signal"
 	"syscall"
 )
 
-var daemonRunFunc = daemon.Run
+const configFilePath = "../../config/app.yaml"
+
+var runFn = run
 
 func main() {
-	container, err := config.NewContainer()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create container: %v", err))
-	}
-
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer cancel()
+	runFn(ctx)
+}
 
-	daemonRunFunc(ctx, container)
+func run(ctx context.Context) {
+	cfg := app.Config{}
+	err := config.NewLoader(configFilePath).Load(&cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	runner, err := app.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	runner.Run(ctx)
 }

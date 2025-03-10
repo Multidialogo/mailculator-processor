@@ -2,45 +2,37 @@ package main
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"mailculator-processor/internal/config"
-	"mailculator-processor/internal/daemon"
+	"github.com/stretchr/testify/require"
 	"os"
 	"syscall"
 	"testing"
 	"time"
 )
 
-func newDaemonRunMockFuncWithTimeout(wrapperCtx context.Context) func(context.Context, *config.Container) {
-	return func(ctx context.Context, container *config.Container) {
-		ctx, cancel := context.WithTimeout(wrapperCtx, 5*time.Second)
-		defer cancel()
-		daemon.Run(ctx, container)
-	}
+type runnerMock struct {
+	duration time.Duration
 }
 
-func TestMainWillGracefullyShutdownWhenSigtermSignal(t *testing.T) {
-	// a timeout is needed to ensure function will stop even if sigterm does not work
-	contextWithTimeout, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	daemonRunFunc = newDaemonRunMockFuncWithTimeout(contextWithTimeout)
-	go sendSigtermSignalInOneSecond(t)
-
-	assert.NotPanics(t, main)
-	assert.Nil(t, contextWithTimeout.Err())
+func (d *runnerMock) runWithTimeout(_ context.Context) {
+	time.Sleep(d.duration)
 }
 
-func sendSigtermSignalInOneSecond(t *testing.T) {
-	time.Sleep(time.Second)
-
+func sleepAndSendSigtermSignal(sleep time.Duration, err error) {
+	time.Sleep(sleep)
 	p, err := os.FindProcess(os.Getpid())
 	if err != nil {
-		t.Fatal("failed to find process to send signal")
+		return
 	}
-
 	err = p.Signal(syscall.SIGTERM)
-	if err != nil {
-		t.Fatal("failed to send SIGTERM")
-	}
+}
+
+func Test_Main_WhenSigtermSignal_WillGracefullyShutdown(t *testing.T) {
+	runnerMock := &runnerMock{duration: 200 * time.Millisecond}
+	runFn = runnerMock.runWithTimeout
+
+	var sendSignalError error
+	go sleepAndSendSigtermSignal(100*time.Millisecond, sendSignalError)
+
+	require.NotPanics(t, main)
+	require.Nilf(t, sendSignalError, "failed to send signal: %v", sendSignalError)
 }

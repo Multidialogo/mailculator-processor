@@ -14,6 +14,33 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
+      - name: Ensure image cache directory
+        run: mkdir -p ~/image-cache
+
+      - name: Check docker image cache
+        id: image-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/image-cache
+          key: image-cache-${{ runner.os }}
+
+      - if: steps.image-cache.outputs.cache-hit != 'true'
+        name: Cache docker images
+        run: |
+          docker pull golang:1.23-alpine
+          docker save -o ~/image-cache/golang.tar golang:1.23-alpine
+          docker pull localstack/localstack
+          docker save -o ~/image-cache/localstack.tar localstack/localstack
+          docker pull axllent/mailpit
+          docker save -o ~/image-cache/mailpit.tar axllent/mailpit
+
+      - if: steps.image-cache.outputs.cache-hit == 'true'
+        name: Load cached docker images
+        run: |
+          docker load -i ~/image-cache/golang.tar
+          docker load -i ~/image-cache/localstack.tar
+          docker load -i ~/image-cache/mailpit.tar
+
       - name: Start dependencies
         run: ./deployments/start-test-dependencies.sh
 

@@ -26,6 +26,10 @@
 /bin/sh ./local/test.sh
 ```
 
+```bash
+open ".coverage/report.html"
+```
+
 #### Simulate deployment stages
 
 ```bash

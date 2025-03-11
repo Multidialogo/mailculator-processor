@@ -13,17 +13,17 @@
 #### How to start/stop local development environment
 
 ```bash
-/bin/sh ./local/start-devenv.sh
+docker compose -f deployments/compose.yml --profile local-dev up -d --build --force-recreate
 ```
 
 ```bash
-/bin/sh ./local/stop-devenv.sh
+docker compose -f deployments/compose.yml --profile local-dev down --remove-orphans -v
 ```
 
 #### Run tests
 
 ```bash
-/bin/sh ./local/test.sh
+docker compose -f deployments/compose.yml exec local-dev sh deployments/resources/coverage.sh
 ```
 
 ```bash

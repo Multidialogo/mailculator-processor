@@ -1,5 +1,7 @@
 #!/bin/sh
 
+go mod tidy
+
 go run gotest.tools/gotestsum@latest ./... -coverpkg=./... -coverprofile=coverage.out
 
 cov=$(go tool cover -func coverage.out | grep -E "^total" | grep -o -E "[0-9]*\.[0-9]*%$")

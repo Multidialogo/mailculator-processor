@@ -6,26 +6,33 @@
 - docker compose v2
 - git
 
-## Scripts
+## Provisioning
 
-### How to start/stop local development environment
+### Scripts
+
+#### How to start/stop local development environment
 
 ```bash
-/bin/sh ./local/start-local-env.sh
+/bin/sh ./local/start-devenv.sh
 ```
 
 ```bash
-/bin/sh ./local/stop-local-env.sh
+/bin/sh ./local/stop-devenv.sh
 ```
 
-### Run tests locally
+#### Run tests
 
 ```bash
 /bin/sh ./local/test.sh
 ```
 
-### Simulate deployments test
+#### Simulate deployment stages
 
 ```bash
-/bin/sh ./local/simulate-deployments-test.sh
+/bin/sh ./deployments/test.sh
 ```
+
+### Graphic tools
+
+- database administration (dbadmin): http://localhost:8001
+- smtp (mailpit): http://localhost:8025

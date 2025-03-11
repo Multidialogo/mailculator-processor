@@ -14,11 +14,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Start test dependencies
-        run: docker compose -f ./deployments/docker/compose.yml --profile test-deps up -d --build --force-recreate
+      - name: Initialize Go cache directory
+        run: mkdir -p ./deployments/.cache/go
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ./deployments/.cache/go
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Run tests
-        run: docker compose -f ./deployments/docker/compose.yml run --rm test
-
-      - name: Stop test dependencies
-        run: docker compose -f ./deployments/docker/compose.yml --profile test-deps down --remove-orphans -v
+        run: ./deployments/test.sh

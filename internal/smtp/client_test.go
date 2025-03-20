@@ -28,7 +28,7 @@ func (suite *ClientTestSuite) SetupTest() {
 		AllowInsecureTls: true,
 	}
 
-	suite.sut = &Client{cfg: cfg}
+	suite.sut = New(cfg)
 }
 
 func (suite *ClientTestSuite) TestClientSendIntegration() {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -26,10 +27,16 @@ func (c *Loader) Load(cfg any) error {
 	decoder := yaml.NewDecoder(strings.NewReader(yamlString))
 	decoder.KnownFields(true)
 
-	if err := decoder.Decode(&cfg); err != nil {
-		return err
-	}
+	decodeErr := decoder.Decode(cfg)
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
-	return validate.Struct(&cfg)
+	err = validate.Struct(cfg)
+
+	if decodeErr != nil && err != nil {
+		return fmt.Errorf("%w\n%w", err, decodeErr)
+	}
+	if decodeErr != nil {
+		return decodeErr
+	}
+	return err
 }

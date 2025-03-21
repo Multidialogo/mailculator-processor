@@ -63,31 +63,6 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	return new(emailMarshaller).UnmarshalList(res.Items)
 }
 
-func (o *Outbox) Insert(ctx context.Context, email Email) error {
-	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", tableName)
-	metaAttrs := new(emailMarshaller).GetMetaAttributes(email)
-	metaParams, err := attributevalue.MarshalList([]interface{}{email.Id, statusMeta, metaAttrs})
-	if err != nil {
-		return err
-	}
-
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", tableName)
-	inParams, err := attributevalue.MarshalList([]interface{}{email.Id, email.Status, map[string]interface{}{}})
-	if err != nil {
-		return err
-	}
-
-	ti := &dynamodb.ExecuteTransactionInput{
-		TransactStatements: []types.ParameterizedStatement{
-			{Statement: aws.String(metaStmt), Parameters: metaParams},
-			{Statement: aws.String(inStmt), Parameters: inParams},
-		},
-	}
-
-	_, err = o.db.ExecuteTransaction(ctx, ti)
-	return err
-}
-
 func (o *Outbox) Update(ctx context.Context, id string, status string) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=? WHERE Id=? AND Status=?", tableName)
 	metaParams, err := attributevalue.MarshalList([]interface{}{status, id, statusMeta})
@@ -118,30 +93,7 @@ type emailItemRow struct {
 	Attributes map[string]interface{} `dynamodbav:"Attributes"`
 }
 
-func (email emailItemRow) GetKey() map[string]types.AttributeValue {
-	id, err := attributevalue.Marshal(email.Id)
-	if err != nil {
-		panic(err)
-	}
-
-	status, err := attributevalue.Marshal(email.Status)
-	if err != nil {
-		panic(err)
-	}
-
-	return map[string]types.AttributeValue{"Id": id, "Status": status}
-}
-
 type emailMarshaller struct{}
-
-func (m *emailMarshaller) GetMetaAttributes(email Email) map[string]interface{} {
-	return map[string]interface{}{
-		"Latest":          email.Status,
-		"EMLFilePath":     email.EmlFilePath,
-		"SuccessCallback": email.SuccessCallback,
-		"FailureCallback": email.FailureCallback,
-	}
-}
 
 func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeValue) (emails []Email, err error) {
 	var items []emailItemRow

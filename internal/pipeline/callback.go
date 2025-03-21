@@ -54,7 +54,6 @@ func (f *callbackExecutorFactory) New(cmd string) *callbackExecutor {
 
 type callbackOutboxService interface {
 	Query(ctx context.Context, status string, limit int) ([]outbox.Email, error)
-	Insert(ctx context.Context, email outbox.Email) error
 	Update(ctx context.Context, id string, status string) error
 }
 

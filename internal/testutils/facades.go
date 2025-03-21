@@ -1,0 +1,85 @@
+package testutils
+
+import (
+	"context"
+	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/google/uuid"
+	"os"
+)
+
+const (
+	tableName  = "Outbox"
+	statusMeta = "_META"
+)
+
+type OutboxFacade struct {
+	db *dynamodb.Client
+}
+
+func NewOutboxFacade() *OutboxFacade {
+	cfg := aws.Config{
+		Region: os.Getenv("AWS_REGION"),
+		Credentials: credentials.NewStaticCredentialsProvider(
+			os.Getenv("AWS_ACCESS_KEY_ID"),
+			os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			"",
+		),
+		BaseEndpoint: aws.String(os.Getenv("AWS_BASE_ENDPOINT")),
+	}
+	return &OutboxFacade{db: dynamodb.NewFromConfig(cfg)}
+}
+
+func (of *OutboxFacade) seeder(index int) map[string]any {
+	id := uuid.NewString()
+	return map[string]any{
+		"Id":              id,
+		"Status":          "PENDING",
+		"EmlFilePath":     "testdata/smol.EML",
+		"SuccessCallback": fmt.Sprintf("curl -X /success/%v", index),
+		"FailureCallback": fmt.Sprintf("curl -X /failure/%v", index),
+	}
+}
+
+func (of *OutboxFacade) getMetaAttributes(email map[string]any) map[string]any {
+	return map[string]any{
+		"Latest":          email["Status"],
+		"EMLFilePath":     email["EmlFilePath"],
+		"SuccessCallback": email["SuccessCallback"],
+		"FailureCallback": email["FailureCallback"],
+	}
+}
+
+func (of *OutboxFacade) AddEmail(ctx context.Context) (string, error) {
+	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", tableName)
+	email := of.seeder(0)
+	metaAttrs := of.getMetaAttributes(email)
+	metaParams, err := attributevalue.MarshalList([]any{
+		email["Id"], statusMeta, metaAttrs,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", tableName)
+	inParams, err := attributevalue.MarshalList([]any{
+		email["Id"], email["Status"], map[string]any{},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	ti := &dynamodb.ExecuteTransactionInput{
+		TransactStatements: []types.ParameterizedStatement{
+			{Statement: aws.String(metaStmt), Parameters: metaParams},
+			{Statement: aws.String(inStmt), Parameters: inParams},
+		},
+	}
+
+	_, err = of.db.ExecuteTransaction(ctx, ti)
+	return fmt.Sprint(email["Id"]), err
+}

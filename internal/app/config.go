@@ -20,10 +20,6 @@ type CallbacksConfig struct {
 	RetryInterval int `yaml:"retry_interval" validate:"required"`
 }
 
-type LogConfig struct {
-	FilePath string `yaml:"file_path" validate:"required"`
-}
-
 type SmtpConfig struct {
 	Host             string `yaml:"host" validate:"required"`
 	Port             int    `yaml:"port" validate:"required"`
@@ -36,7 +32,6 @@ type SmtpConfig struct {
 type Config struct {
 	Aws       AwsConfig       `yaml:"aws" validate:"required"`
 	Callbacks CallbacksConfig `yaml:"callbacks" validate:"required"`
-	Log       LogConfig       `yaml:"log" validate:"required"`
 	Smtp      SmtpConfig      `yaml:"smtp" validate:"required"`
 }
 

@@ -8,9 +8,6 @@ callbacks:
   max_retries: 3
   retry_interval: 5
 
-log:
-  file_path: "/var/log/app/app.log"
-
 smtp:
   host: "${SMTP_HOST}"
   port: ${SMTP_PORT}

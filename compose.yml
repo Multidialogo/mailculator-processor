@@ -1,0 +1,106 @@
+networks:
+  mailculator-processor-deployments-net:
+
+services:
+  test:
+    container_name: mailculator_processor_test
+    profiles:
+      - "test"
+    image: golang:1.24-alpine
+    working_dir: /app
+    environment:
+      AWS_BASE_ENDPOINT: "http://127.0.0.1:4566"
+      AWS_ACCESS_KEY_ID: "local"
+      AWS_SECRET_ACCESS_KEY: "local"
+      AWS_REGION: "eu-west-1"
+      SMTP_HOST: "127.0.0.1"
+      SMTP_USER: "user"
+      SMTP_PASS: "pass"
+      SMTP_PORT: "1025"
+      SMTP_FROM: "mailer@example.com"
+    command: ["sh", "-c", "go mod tidy && go test ./..."]
+    volumes:
+      - ./.cache/go:/go/pkg/mod:cached
+      - .:/app
+    network_mode: host
+    depends_on:
+      localstack-test:
+        condition: service_started
+      mailpit-test:
+        condition: service_started
+
+  # TODO use dynamodb image as it is more lightweight
+  localstack: &localstack-base
+    profiles:
+      - "none"
+    image: localstack/localstack
+    environment:
+      DEBUG: 0
+      DYNAMODB_SHARE_DB: 1
+      DEFAULT_REGION: "eu-west-1"
+    volumes:
+      - ./docker/localstack:/etc/localstack/init/ready.d
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '127.0.0.1:4566:4566'
+    networks:
+      - mailculator-processor-deployments-net
+
+  mailpit: &mailpit-base
+    profiles:
+      - "none"
+    image: axllent/mailpit
+    environment:
+      MP_SMTP_TLS_CERT: "/certs/cert.pem"
+      MP_SMTP_TLS_KEY: "/certs/key.pem"
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+    volumes:
+      - ./docker/fake-smtp-certs:/certs
+    networks:
+      - mailculator-processor-deployments-net
+
+  localstack-test:
+    <<: *localstack-base
+    container_name: mailculator_processor_localstack_test
+    profiles:
+      - "test-deps"
+      - "test"
+
+  localstack-devcontainer:
+    <<: *localstack-base
+    container_name: mailculator_processor_localstack_devcontainer
+    profiles:
+      - "devcontainer-deps"
+
+  mailpit-test:
+    <<: *mailpit-base
+    container_name: mailculator_processor_mailpit_test
+    profiles:
+      - "test-deps"
+      - "test"
+    ports:
+      - '127.0.0.1:1025:1025'
+
+  mailpit-devcontainer:
+    <<: *mailpit-base
+    container_name: mailculator_processor_mailpit_test
+    profiles:
+      - "devcontainer-deps"
+    ports:
+      - '127.0.0.1:1025:1025'
+
+  dbadmin:
+    container_name: mailculator_processor_dbadmin_test
+    profiles:
+      - "devcontainer-deps"
+    image: aaronshaf/dynamodb-admin
+    ports:
+      - '127.0.0.1:8001:8001'
+    environment:
+      DYNAMO_ENDPOINT: "http://local-dev-aws:4566"
+      AWS_REGION: "eu-west-1"
+      AWS_ACCESS_KEY_ID: "local"
+      AWS_SECRET_ACCESS_KEY: "local"
+    networks:
+      - mailculator-processor-deployments-net

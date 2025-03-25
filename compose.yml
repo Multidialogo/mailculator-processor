@@ -1,6 +1,7 @@
 networks:
   mailculator-processor-deployments-net:
 
+
 services:
   test:
     container_name: mailculator_processor_test
@@ -89,6 +90,7 @@ services:
       - "devcontainer-deps"
     ports:
       - '127.0.0.1:1025:1025'
+      - '127.0.0.1:9002:8025'
 
   dbadmin:
     container_name: mailculator_processor_dbadmin_test
@@ -96,7 +98,7 @@ services:
       - "devcontainer-deps"
     image: aaronshaf/dynamodb-admin
     ports:
-      - '127.0.0.1:8001:8001'
+      - '127.0.0.1:9001:8001'
     environment:
       DYNAMO_ENDPOINT: "http://local-dev-aws:4566"
       AWS_REGION: "eu-west-1"

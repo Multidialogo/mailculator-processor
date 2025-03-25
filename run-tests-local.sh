@@ -8,7 +8,7 @@ coverage() {
   report_filename="report.html"
   report_path="$report_dir/$report_filename"
 
-  export AWS_BASE_ENDPOINT=http://127.0.0.1:4566
+  export AWS_BASE_ENDPOINT=http://127.0.0.1:8001
   export AWS_ACCESS_KEY_ID=local
   export AWS_SECRET_ACCESS_KEY=local
   export AWS_REGION=eu-west-1
@@ -32,10 +32,11 @@ coverage() {
 
 if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --build --force-recreate; then
   echo "Could not start test dependencies"
+  docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans
   exit 1
 fi
 
 # run in subshell to avoid exporting env variables
 (coverage)
 
-docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans -v
+docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans

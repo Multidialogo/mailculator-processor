@@ -14,19 +14,24 @@
   },
 
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  // "forwardPorts": [],
+  "forwardPorts": [
+    "localhost:9001",
+    "localhost:9002",
+  ],
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  // "postCreateCommand": "npm --version",
+  // "postCreateCommand": "go --version",
+  "postAttachCommand": "go mod tidy",
 
   // Configure tool-specific properties.
   "customizations": {
     "jetbrains": {
       "backend": "GoLand"
     }
-  }
+  },
 
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
+  "containerUser": "node"
 
 }

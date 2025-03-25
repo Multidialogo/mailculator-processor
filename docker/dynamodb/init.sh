@@ -1,6 +1,7 @@
 #!/bin/sh
 
-awslocal dynamodb create-table \
+aws dynamodb create-table \
+    --endpoint-url http://dynamodb-test:8000 \
     --table-name Outbox \
     --attribute-definitions \
        AttributeName=Id,AttributeType=S \

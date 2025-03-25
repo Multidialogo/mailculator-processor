@@ -1,7 +1,9 @@
 #!/bin/sh
 
+dynamodb_service_name="${1}"
+
 aws dynamodb create-table \
-    --endpoint-url http://dynamodb-test:8000 \
+    --endpoint-url "http://${dynamodb_service_name}:8000" \
     --table-name Outbox \
     --attribute-definitions \
        AttributeName=Id,AttributeType=S \

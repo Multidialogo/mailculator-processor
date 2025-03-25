@@ -62,8 +62,7 @@ services:
       AWS_ACCESS_KEY_ID: 'local'
       AWS_SECRET_ACCESS_KEY: 'local'
       AWS_REGION: 'eu-west-1'
-    entrypoint: ''
-    command: ['sh', '/scripts/init.sh']
+    entrypoint: ['sh', '/scripts/init.sh']
     networks:
       - mailculator-processor-deployments-net
 
@@ -72,6 +71,7 @@ services:
     container_name: mailculator_processor_dynamodb_setup_test
     profiles:
       - 'test-deps'
+    command: ['dynamodb-test']
     depends_on:
       dynamodb-test:
         condition: service_healthy
@@ -93,6 +93,7 @@ services:
     container_name: mailculator_processor_dynamodb_setup_devcontainer
     profiles:
       - 'devcontainer-deps'
+    command: ['dynamodb-devcontainer']
     depends_on:
       dynamodb-devcontainer:
         condition: service_healthy
@@ -129,14 +130,14 @@ services:
       - '127.0.0.1:9002:8025'
 
   dbadmin:
-    container_name: mailculator_processor_dbadmin_test
+    container_name: mailculator_processor_dbadmin_devcontainer
     profiles:
       - 'devcontainer-deps'
     image: aaronshaf/dynamodb-admin
     ports:
       - '127.0.0.1:9001:8001'
     environment:
-      DYNAMO_ENDPOINT: 'http://local-dev-aws:4566'
+      DYNAMO_ENDPOINT: 'http://dynamodb-devcontainer:8000'
       AWS_REGION: 'eu-west-1'
       AWS_ACCESS_KEY_ID: 'local'
       AWS_SECRET_ACCESS_KEY: 'local'

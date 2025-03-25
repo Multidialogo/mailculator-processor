@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"log"
-	"mailculator-processor/internal/app"
-	"mailculator-processor/internal/config"
 	"os/signal"
 	"syscall"
+
+	"mailculator-processor/internal/app"
+	"mailculator-processor/internal/config"
 )
 
 const configFilePath = "../../config/app.yaml"
@@ -20,16 +21,14 @@ func main() {
 }
 
 func run(ctx context.Context) {
-	cfg := app.Config{}
-	err := config.NewLoader(configFilePath).Load(&cfg)
+	cfg, err := config.NewFromYaml(configFilePath)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 
 	runner, err := app.New(cfg)
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Panic(err)
 	}
 
 	runner.Run(ctx)

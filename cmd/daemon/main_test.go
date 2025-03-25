@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"os"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type runnerMock struct {

@@ -68,6 +68,18 @@ services:
       - "test-deps"
       - "test"
 
+  wait-for-localstack-test:
+    container_name: mailculator_processor_wait_for_localstack_test
+    profiles:
+      - "test-deps"
+    image: golang:1.24-alpine
+    command: ["echo", "Service localstack-test is running"]
+    networks:
+      - mailculator-processor-deployments-net
+    depends_on:
+      localstack-test:
+        condition: service_healthy
+
   localstack-devcontainer:
     <<: *localstack-base
     container_name: mailculator_processor_localstack_devcontainer

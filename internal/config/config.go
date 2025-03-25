@@ -1,11 +1,18 @@
-package app
+package config
 
 import (
+	"fmt"
+	"gopkg.in/yaml.v3"
+	"io"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/go-playground/validator/v10"
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
-	"time"
 )
 
 type AwsConfig struct {
@@ -30,9 +37,46 @@ type SmtpConfig struct {
 }
 
 type Config struct {
-	Aws       AwsConfig       `yaml:"aws" validate:"required"`
-	Callbacks CallbacksConfig `yaml:"callbacks" validate:"required"`
-	Smtp      SmtpConfig      `yaml:"smtp" validate:"required"`
+	Aws       AwsConfig       `yaml:"aws,flow" validate:"required"`
+	Callbacks CallbacksConfig `yaml:"callbacks,flow" validate:"required"`
+	Smtp      SmtpConfig      `yaml:"smtp,flow" validate:"required"`
+}
+
+func NewFromYaml(filePath string) (*Config, error) {
+	config := &Config{}
+
+	yamlData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	yamlString := os.ExpandEnv(string(yamlData))
+
+	reader := strings.NewReader(yamlString)
+
+	if err := config.Load(reader); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func (c *Config) Load(r io.Reader) error {
+	decoder := yaml.NewDecoder(r)
+	decoder.KnownFields(true)
+
+	decodeErr := decoder.Decode(c)
+
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	err := validate.Struct(c)
+
+	if decodeErr != nil && err != nil {
+		return fmt.Errorf("%w\n%w", err, decodeErr)
+	}
+	if decodeErr != nil {
+		return decodeErr
+	}
+	return err
 }
 
 func (c *Config) getAwsCredentialsProvider() credentials.StaticCredentialsProvider {
@@ -43,7 +87,7 @@ func (c *Config) getAwsCredentialsProvider() credentials.StaticCredentialsProvid
 	)
 }
 
-func (c *Config) getAwsConfig() aws.Config {
+func (c *Config) GetAwsConfig() aws.Config {
 	cfg := aws.Config{
 		Region:      c.Aws.Region,
 		Credentials: c.getAwsCredentialsProvider(),
@@ -56,14 +100,14 @@ func (c *Config) getAwsConfig() aws.Config {
 	return cfg
 }
 
-func (c *Config) getCallbackPipelineConfig() pipeline.CallbackConfig {
+func (c *Config) GetCallbackPipelineConfig() pipeline.CallbackConfig {
 	return pipeline.CallbackConfig{
 		MaxRetries:    c.Callbacks.MaxRetries,
 		RetryInterval: time.Duration(c.Callbacks.RetryInterval),
 	}
 }
 
-func (c *Config) getSmtpConfig() smtp.Config {
+func (c *Config) GetSmtpConfig() smtp.Config {
 	return smtp.Config{
 		Host:             c.Smtp.Host,
 		Port:             c.Smtp.Port,

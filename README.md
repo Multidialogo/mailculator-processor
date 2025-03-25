@@ -10,21 +10,23 @@
 
 ### Scripts
 
-#### How to start/stop local development environment
+#### How to start local development environment dependencies
 
 ```bash
-docker compose -f deployments/compose.yml --profile local-dev up -d --build --force-recreate
+docker compose --profile devcontainer-deps up -d --build
 ```
 
 ```bash
-docker compose -f deployments/compose.yml --profile local-dev down --remove-orphans -v
+docker compose --profile devcontainer-deps down --remove-orphans
 ```
 
 #### Run tests
 
 ```bash
-docker compose -f deployments/compose.yml exec local-dev sh deployments/resources/coverage.sh
+/bin/sh ./run-tests-local.sh
 ```
+
+A coverage report will be exported at `.coverage/report.html`
 
 ```bash
 open ".coverage/report.html"
@@ -33,10 +35,10 @@ open ".coverage/report.html"
 #### Simulate deployment stages
 
 ```bash
-/bin/sh ./deployments/test.sh
+/bin/sh ./run-tests-ci.sh
 ```
 
 ### Graphic tools
 
-- database administration (dbadmin): http://localhost:8001
-- smtp (mailpit): http://localhost:8025
+- database administration (dbadmin): http://localhost:9001
+- smtp (mailpit): http://localhost:9002

@@ -3,6 +3,7 @@ aws:
   secret: dummy-secret
   region: "dummy-region-with-quotation-marks"
   base_endpoint: dummy-base-endpoint
+  sus: "hello"
 
 callbacks:
   max_retries: 3

@@ -35,9 +35,6 @@ if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --bui
   exit 1
 fi
 
-# sleep to give time to localstack to start database
-sleep 5
-
 # run in subshell to avoid exporting env variables
 (coverage)
 

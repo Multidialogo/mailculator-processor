@@ -2,14 +2,12 @@ aws:
   key: dummy-key
   secret: dummy-secret
   region: "dummy-region-with-quotation-marks"
-  base_endpoint: dummy-base-endpoint
 
 callbacks:
   max_retries: 3
   retry_interval: 5
 
 smtp:
-  host: dummy-host
   port: 12345
   user: dummy-user
   password: dummy-password

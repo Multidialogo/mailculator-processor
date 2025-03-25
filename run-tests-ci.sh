@@ -9,8 +9,8 @@ fi
 
 if ! docker compose -f "$script_dir/compose.yml" run --rm test; then
   echo "Test failed"
-  docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans -v
+  docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans
   exit 1
 fi
 
-docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans -v
+docker compose -f "$script_dir/compose.yml" --profile test-deps down --remove-orphans

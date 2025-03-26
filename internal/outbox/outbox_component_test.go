@@ -3,104 +3,105 @@ package outbox
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"mailculator-processor/internal/testutils"
 )
 
-func TestOutboxTestSuiteIntegration(t *testing.T) {
-	suite.Run(t, &OutboxTestSuite{})
-}
+var fixtures map[string]string
 
-type OutboxTestSuite struct {
-	suite.Suite
-	db       *dynamodb.Client
-	sut      *Outbox
-	inserted []string
-}
-
-func (suite *OutboxTestSuite) SetupTest() {
-	cfg := aws.Config{
-		Region: os.Getenv("AWS_REGION"),
-		Credentials: credentials.NewStaticCredentialsProvider(
-			os.Getenv("AWS_ACCESS_KEY_ID"),
-			os.Getenv("AWS_SECRET_ACCESS_KEY"),
-			"",
-		),
-		BaseEndpoint: aws.String(os.Getenv("AWS_BASE_ENDPOINT")),
+func deleteFixtures(t *testing.T, db *dynamodb.Client) {
+	if len(fixtures) == 0 {
+		t.Log("no fixtures to delete")
+		return
 	}
 
-	suite.db = dynamodb.NewFromConfig(cfg)
-	suite.sut = NewOutbox(suite.db)
-}
+	t.Logf("deleting fixtures: %v", fixtures)
 
-func (suite *OutboxTestSuite) TearDownTest() {
-	query := fmt.Sprintf("SELECT Id, Status FROM \"%v\"", "Outbox")
-	stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query)}
-	res, err := suite.db.ExecuteStatement(context.TODO(), stmt)
-	suite.Require().NoError(err)
+	query := fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", "Outbox")
+	for id, status := range fixtures {
+		params, _ := attributevalue.MarshalList([]interface{}{id, status})
+		stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
 
-	var items []emailItemRow
-	_ = attributevalue.UnmarshalListOfMaps(res.Items, &items)
-
-	query = fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", "Outbox")
-	for _, item := range items {
-		params, _ := attributevalue.MarshalList([]interface{}{item.Id, item.Status})
-		stmt = &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
-
-		_, err = suite.db.ExecuteStatement(context.TODO(), stmt)
-		suite.Assert().NoError(err)
+		if _, err := db.ExecuteStatement(context.TODO(), stmt); err != nil {
+			t.Errorf("error while deleting fixture %s, error: %v", id, err)
+		}
 	}
 }
 
-func (suite *OutboxTestSuite) TestMainOutboxQueryInsertUpdateIntegration() {
-	ctx := context.TODO()
+func TestOutboxComponentWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("component tests are skipped in short mode")
+	}
+
+	awsConfig := testutils.NewAwsConfigFromEnv()
+	db := dynamodb.NewFromConfig(awsConfig)
+	sut := NewOutbox(db)
+
+	fixtures = map[string]string{}
+	defer deleteFixtures(t, db)
+
+	of := testutils.NewOutboxFacade()
 
 	// no record in db, should return 0
-	res, err := suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().NoError(err)
-	suite.Assert().Len(res, 0)
+	res, err := sut.Query(context.TODO(), "PENDING", 25)
+	require.NoError(t, err)
+	require.Len(t, res, 0)
 
-	// insert a record in db
-	of := testutils.NewOutboxFacade()
-	id, err := of.AddEmail(ctx)
-	suite.Assert().NoError(err)
+	// insert two records in db
+	id, err := of.AddEmail(context.TODO())
+	require.NoErrorf(t, err, "failed inserting id %s, error: %v", id, err)
+	fixtures[id] = "PENDING"
 
-	// filtering by status PENDING should return 1 record at this point, the same record inserted before
-	res, err = suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(id, res[0].Id)
-	suite.Assert().Equal("PENDING", res[0].Status)
+	anotherId, err := of.AddEmail(context.TODO())
+	require.NoErrorf(t, err, "failed inserting id %s, error: %v", anotherId, err)
+	fixtures[anotherId] = "PENDING"
+
+	// filtering by status PENDING should return 2 records at this point
+	res, err = sut.Query(context.TODO(), "PENDING", 25)
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+
+	// same filter with limit 1 should give only 1 record
+	res, err = sut.Query(context.TODO(), "PENDING", 1)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
 
 	// filtering by status PROCESSING should return 0 records at this point
-	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
-	suite.Assert().Len(res, 0)
+	res, err = sut.Query(context.TODO(), "PROCESSING", 25)
+	require.NoError(t, err)
+	require.Len(t, res, 0)
 
 	// update fixture to status PROCESSING
-	err = suite.sut.Update(ctx, id, "PROCESSING")
-	suite.Assert().NoError(err)
+	err = sut.Update(context.TODO(), id, "PROCESSING")
+	require.NoError(t, err)
+	fixtures[id] = "PROCESSING"
 
-	// filtering by status PENDING should return 0 records at this point
-	res, err = suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().Len(res, 0)
+	// filtering by status PENDING should return 1 record at this point, with status PENDING
+	res, err = sut.Query(context.TODO(), "PENDING", 25)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.Equal(t, "PENDING", res[0].Status)
 
-	// filtering by status PROCESSING should return 1 records at this point
-	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(id, res[0].Id)
-	suite.Assert().Equal("PROCESSING", res[0].Status)
+	// filtering by status PROCESSING should return 1 records at this point, with status PROCESSING
+	res, err = sut.Query(context.TODO(), "PROCESSING", 25)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.Equal(t, "PROCESSING", res[0].Status)
 
 	// item already is in status PROCESSING, so it should return error
-	err = suite.sut.Update(ctx, id, "PROCESSING")
-	suite.Assert().Error(err)
+	err = sut.Update(context.TODO(), id, "PROCESSING")
+	assert.Error(t, err)
 
 	// status cannot be rolled back
-	err = suite.sut.Update(ctx, id, "PENDING")
-	suite.Assert().Error(err)
+	err = sut.Update(context.TODO(), id, "PENDING")
+	if err == nil {
+		fixtures[id] = "PENDING"
+		t.Errorf("expected error, got nil")
+	}
 }

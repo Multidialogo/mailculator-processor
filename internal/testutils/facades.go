@@ -17,12 +17,8 @@ const (
 	statusMeta = "_META"
 )
 
-type OutboxFacade struct {
-	db *dynamodb.Client
-}
-
-func NewOutboxFacade() *OutboxFacade {
-	cfg := aws.Config{
+func NewAwsConfigFromEnv() aws.Config {
+	return aws.Config{
 		Region: os.Getenv("AWS_REGION"),
 		Credentials: credentials.NewStaticCredentialsProvider(
 			os.Getenv("AWS_ACCESS_KEY_ID"),
@@ -31,6 +27,14 @@ func NewOutboxFacade() *OutboxFacade {
 		),
 		BaseEndpoint: aws.String(os.Getenv("AWS_BASE_ENDPOINT")),
 	}
+}
+
+type OutboxFacade struct {
+	db *dynamodb.Client
+}
+
+func NewOutboxFacade() *OutboxFacade {
+	cfg := NewAwsConfigFromEnv()
 	return &OutboxFacade{db: dynamodb.NewFromConfig(cfg)}
 }
 

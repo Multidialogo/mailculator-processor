@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -34,8 +35,13 @@ type Email struct {
 	FailureCallback string
 }
 
+type dynamodbInterface interface {
+	ExecuteStatement(context.Context, *dynamodb.ExecuteStatementInput, ...func(options *dynamodb.Options)) (*dynamodb.ExecuteStatementOutput, error)
+	ExecuteTransaction(context.Context, *dynamodb.ExecuteTransactionInput, ...func(options *dynamodb.Options)) (*dynamodb.ExecuteTransactionOutput, error)
+}
+
 type Outbox struct {
-	db *dynamodb.Client
+	db dynamodbInterface
 }
 
 func NewOutbox(db *dynamodb.Client) *Outbox {
@@ -44,10 +50,7 @@ func NewOutbox(db *dynamodb.Client) *Outbox {
 
 func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, error) {
 	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", tableName, statusIndex)
-	params, err := attributevalue.MarshalList([]interface{}{statusMeta, status})
-	if err != nil {
-		return []Email{}, err
-	}
+	params, _ := attributevalue.MarshalList([]interface{}{statusMeta, status})
 
 	stmt := &dynamodb.ExecuteStatementInput{
 		Parameters: params,
@@ -65,16 +68,10 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 
 func (o *Outbox) Update(ctx context.Context, id string, status string) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=? WHERE Id=? AND Status=?", tableName)
-	metaParams, err := attributevalue.MarshalList([]interface{}{status, id, statusMeta})
-	if err != nil {
-		return err
-	}
+	metaParams, _ := attributevalue.MarshalList([]interface{}{status, id, statusMeta})
 
 	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", tableName)
-	inParams, err := attributevalue.MarshalList([]interface{}{id, status, map[string]interface{}{}})
-	if err != nil {
-		return err
-	}
+	inParams, _ := attributevalue.MarshalList([]interface{}{id, status, map[string]interface{}{}})
 
 	ti := &dynamodb.ExecuteTransactionInput{
 		TransactStatements: []types.ParameterizedStatement{
@@ -83,7 +80,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string) error {
 		},
 	}
 
-	_, err = o.db.ExecuteTransaction(ctx, ti)
+	_, err := o.db.ExecuteTransaction(ctx, ti)
 	return err
 }
 

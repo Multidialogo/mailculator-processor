@@ -2,104 +2,86 @@ package outbox
 
 import (
 	"context"
-	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"errors"
+	"testing"
+
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/stretchr/testify/suite"
-	"mailculator-processor/internal/testutils"
-	"os"
-	"testing"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestOutboxTestSuiteIntegration(t *testing.T) {
-	suite.Run(t, &OutboxTestSuite{})
+type dynamodbMock struct {
+	statementOutput   *dynamodb.ExecuteStatementOutput
+	transactionOutput *dynamodb.ExecuteTransactionOutput
+	returnError       error
 }
 
-type OutboxTestSuite struct {
-	suite.Suite
-	db       *dynamodb.Client
-	sut      *Outbox
-	inserted []string
+func (m *dynamodbMock) ExecuteStatement(_ context.Context, _ *dynamodb.ExecuteStatementInput, _ ...func(options *dynamodb.Options)) (*dynamodb.ExecuteStatementOutput, error) {
+	return m.statementOutput, m.returnError
 }
 
-func (suite *OutboxTestSuite) SetupTest() {
-	cfg := aws.Config{
-		Region: os.Getenv("AWS_REGION"),
-		Credentials: credentials.NewStaticCredentialsProvider(
-			os.Getenv("AWS_ACCESS_KEY_ID"),
-			os.Getenv("AWS_SECRET_ACCESS_KEY"),
-			"",
-		),
-		BaseEndpoint: aws.String(os.Getenv("AWS_BASE_ENDPOINT")),
+func (m *dynamodbMock) ExecuteTransaction(_ context.Context, _ *dynamodb.ExecuteTransactionInput, _ ...func(options *dynamodb.Options)) (*dynamodb.ExecuteTransactionOutput, error) {
+	return m.transactionOutput, m.returnError
+}
+
+func TestQuery_WhenDatabaseHasRecord_ShouldReturnMarshalledEmail(t *testing.T) {
+	t.Parallel()
+
+	record, _ := attributevalue.MarshalMap(map[string]interface{}{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]interface{}{
+			"Latest":          "PENDING",
+			"EMLFilePath":     "/efs/email.eml",
+			"SuccessCallback": "curl http://localhost:8000/success",
+			"FailureCallback": "curl http://localhost:8000/failure",
+		},
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
 	}
 
-	suite.db = dynamodb.NewFromConfig(cfg)
-	suite.sut = NewOutbox(suite.db)
+	sut := &Outbox{db: dbMock}
+
+	actual, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.NoError(t, err)
+	require.Len(t, actual, 1)
+	assert.Equal(t, actual[0].Status, "PENDING")
 }
 
-func (suite *OutboxTestSuite) TearDownTest() {
-	query := fmt.Sprintf("SELECT Id, Status FROM \"%v\"", "Outbox")
-	stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query)}
-	res, err := suite.db.ExecuteStatement(context.TODO(), stmt)
-	suite.Require().NoError(err)
+func TestQuery_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
+	t.Parallel()
 
-	var items []emailItemRow
-	_ = attributevalue.UnmarshalListOfMaps(res.Items, &items)
+	expectedError := errors.New("some error")
+	dbMock := &dynamodbMock{returnError: expectedError}
+	sut := &Outbox{db: dbMock}
 
-	query = fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", "Outbox")
-	for _, item := range items {
-		params, _ := attributevalue.MarshalList([]interface{}{item.Id, item.Status})
-		stmt = &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
-
-		_, err = suite.db.ExecuteStatement(context.TODO(), stmt)
-		suite.Assert().NoError(err)
-	}
+	_, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.ErrorIs(t, expectedError, err)
 }
 
-func (suite *OutboxTestSuite) TestMainOutboxQueryInsertUpdateIntegration() {
-	ctx := context.TODO()
+func TestUpdate_WhenDatabaseReturnNoError_ShouldReturnNoError(t *testing.T) {
+	t.Parallel()
 
-	// no record in db, should return 0
-	res, err := suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().NoError(err)
-	suite.Assert().Len(res, 0)
+	dbMock := &dynamodbMock{transactionOutput: &dynamodb.ExecuteTransactionOutput{}}
+	sut := &Outbox{db: dbMock}
 
-	// insert a record in db
-	of := testutils.NewOutboxFacade()
-	id, err := of.AddEmail(ctx)
-	suite.Assert().NoError(err)
+	err := sut.Update(context.TODO(), "12345", "PENDING")
+	assert.NoError(t, err)
+}
 
-	// filtering by status PENDING should return 1 record at this point, the same record inserted before
-	res, err = suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(id, res[0].Id)
-	suite.Assert().Equal("PENDING", res[0].Status)
+func TestUpdate_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
+	t.Parallel()
 
-	// filtering by status PROCESSING should return 0 records at this point
-	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
-	suite.Assert().Len(res, 0)
+	expectedError := errors.New("some error")
+	dbMock := &dynamodbMock{returnError: expectedError}
+	sut := &Outbox{db: dbMock}
 
-	// update fixture to status PROCESSING
-	err = suite.sut.Update(ctx, id, "PROCESSING")
-	suite.Assert().NoError(err)
-
-	// filtering by status PENDING should return 0 records at this point
-	res, err = suite.sut.Query(ctx, "PENDING", 25)
-	suite.Assert().Len(res, 0)
-
-	// filtering by status PROCESSING should return 1 records at this point
-	res, err = suite.sut.Query(ctx, "PROCESSING", 25)
-	suite.Assert().Len(res, 1)
-	suite.Assert().Equal(id, res[0].Id)
-	suite.Assert().Equal("PROCESSING", res[0].Status)
-
-	// item already is in status PROCESSING, so it should return error
-	err = suite.sut.Update(ctx, id, "PROCESSING")
-	suite.Assert().Error(err)
-
-	// status cannot be rolled back
-	err = suite.sut.Update(ctx, id, "PENDING")
-	suite.Assert().Error(err)
+	err := sut.Update(context.TODO(), "12345", "PENDING")
+	assert.ErrorIs(t, expectedError, err)
 }

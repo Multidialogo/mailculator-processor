@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"mailculator-processor/internal/testutils"
+	"mailculator-processor/internal/testutils/facades"
 )
 
 var fixtures map[string]string
@@ -39,14 +39,14 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 		t.Skip("component tests are skipped in short mode")
 	}
 
-	awsConfig := testutils.NewAwsConfigFromEnv()
+	awsConfig := facades.NewAwsConfigFromEnv()
 	db := dynamodb.NewFromConfig(awsConfig)
 	sut := NewOutbox(db)
 
 	fixtures = map[string]string{}
 	defer deleteFixtures(t, db)
 
-	of := testutils.NewOutboxFacade()
+	of := facades.NewOutboxFacade()
 
 	// no record in db, should return 0
 	res, err := sut.Query(context.TODO(), "PENDING", 25)

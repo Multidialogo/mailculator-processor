@@ -19,13 +19,13 @@ type AppTestSuite struct {
 	suite.Suite
 }
 
-type mockConfigProvider struct{}
+type configProviderMock struct{}
 
-func newMockConfigProvider() *mockConfigProvider {
-	return &mockConfigProvider{}
+func newConfigProviderMock() *configProviderMock {
+	return &configProviderMock{}
 }
 
-func (cp *mockConfigProvider) GetAwsConfig() aws.Config {
+func (cp *configProviderMock) GetAwsConfig() aws.Config {
 	return aws.Config{
 		Region:       "dummy-region",
 		Credentials:  credentials.NewStaticCredentialsProvider("dummy-key", "dummy-secret", "dummy-session"),
@@ -33,11 +33,11 @@ func (cp *mockConfigProvider) GetAwsConfig() aws.Config {
 	}
 }
 
-func (cp *mockConfigProvider) GetCallbackPipelineConfig() pipeline.CallbackConfig {
+func (cp *configProviderMock) GetCallbackPipelineConfig() pipeline.CallbackConfig {
 	return pipeline.CallbackConfig{MaxRetries: 2, RetryInterval: 3}
 }
 
-func (cp *mockConfigProvider) GetSmtpConfig() smtp.Config {
+func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
 	return smtp.Config{
 		Host:             "dummy-host",
 		Port:             1234,
@@ -49,7 +49,7 @@ func (cp *mockConfigProvider) GetSmtpConfig() smtp.Config {
 }
 
 func (suite *AppTestSuite) TestAppInstance() {
-	app, errNew := New(newMockConfigProvider())
+	app, errNew := New(newConfigProviderMock())
 	suite.Require().NoError(errNew)
 	suite.Require().Equal(3, len(app.pipes))
 	suite.Assert().NotZero(app.pipes[0])
@@ -57,23 +57,23 @@ func (suite *AppTestSuite) TestAppInstance() {
 	suite.Assert().NotZero(app.pipes[2])
 }
 
-type mockProcessor struct {
+type processorMock struct {
 	sleepMilliseconds int
 	calls             int
 }
 
-func newMockProcessor(sleepMilliseconds int) *mockProcessor {
-	return &mockProcessor{sleepMilliseconds: sleepMilliseconds, calls: 0}
+func newProcessorMock(sleepMilliseconds int) *processorMock {
+	return &processorMock{sleepMilliseconds: sleepMilliseconds, calls: 0}
 }
 
-func (t *mockProcessor) Process(ctx context.Context) {
+func (t *processorMock) Process(ctx context.Context) {
 	time.Sleep(time.Duration(t.sleepMilliseconds) * time.Millisecond)
 	t.calls++
 }
 
 func (suite *AppTestSuite) TestRunFunction() {
-	proc1 := newMockProcessor(200)
-	proc2 := newMockProcessor(200)
+	proc1 := newProcessorMock(200)
+	proc2 := newProcessorMock(200)
 	app := &App{pipes: []pipelineProcessor{proc1, proc2}}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)

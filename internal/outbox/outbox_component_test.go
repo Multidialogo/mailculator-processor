@@ -49,59 +49,59 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	of := facades.NewOutboxFacade()
 
 	// no record in db, should return 0
-	res, err := sut.Query(context.TODO(), "PENDING", 25)
+	res, err := sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 0)
 
 	// insert two records in db
-	id, err := of.AddEmail(context.TODO())
+	id, err := of.AddEmail(context.TODO(), "")
 	require.NoErrorf(t, err, "failed inserting id %s, error: %v", id, err)
-	fixtures[id] = "PENDING"
+	fixtures[id] = StatusReady
 
-	anotherId, err := of.AddEmail(context.TODO())
+	anotherId, err := of.AddEmail(context.TODO(), "")
 	require.NoErrorf(t, err, "failed inserting id %s, error: %v", anotherId, err)
-	fixtures[anotherId] = "PENDING"
+	fixtures[anotherId] = StatusReady
 
-	// filtering by status PENDING should return 2 records at this point
-	res, err = sut.Query(context.TODO(), "PENDING", 25)
+	// filtering by status READY should return 2 records at this point
+	res, err = sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 2)
 
 	// same filter with limit 1 should give only 1 record
-	res, err = sut.Query(context.TODO(), "PENDING", 1)
+	res, err = sut.Query(context.TODO(), StatusReady, 1)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
 
 	// filtering by status PROCESSING should return 0 records at this point
-	res, err = sut.Query(context.TODO(), "PROCESSING", 25)
+	res, err = sut.Query(context.TODO(), StatusProcessing, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 0)
 
 	// update fixture to status PROCESSING
-	err = sut.Update(context.TODO(), id, "PROCESSING")
+	err = sut.Update(context.TODO(), id, StatusProcessing)
 	require.NoError(t, err)
-	fixtures[id] = "PROCESSING"
+	fixtures[id] = StatusProcessing
 
-	// filtering by status PENDING should return 1 record at this point, with status PENDING
-	res, err = sut.Query(context.TODO(), "PENDING", 25)
+	// filtering by status READY should return 1 record at this point, with status READY
+	res, err = sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
-	assert.Equal(t, "PENDING", res[0].Status)
+	assert.Equal(t, StatusReady, res[0].Status)
 
 	// filtering by status PROCESSING should return 1 records at this point, with status PROCESSING
-	res, err = sut.Query(context.TODO(), "PROCESSING", 25)
+	res, err = sut.Query(context.TODO(), StatusProcessing, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
-	assert.Equal(t, "PROCESSING", res[0].Status)
+	assert.Equal(t, StatusProcessing, res[0].Status)
 
 	// item already is in status PROCESSING, so it should return error
-	err = sut.Update(context.TODO(), id, "PROCESSING")
+	err = sut.Update(context.TODO(), id, StatusProcessing)
 	assert.Error(t, err)
 
 	// status cannot be rolled back
-	err = sut.Update(context.TODO(), id, "PENDING")
+	err = sut.Update(context.TODO(), id, StatusReady)
 	if err == nil {
-		fixtures[id] = "PENDING"
+		fixtures[id] = StatusReady
 		t.Errorf("expected error, got nil")
 	}
 }

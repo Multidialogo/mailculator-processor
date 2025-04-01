@@ -9,7 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	"io"
 	"os"
+	"strings"
 )
 
 const (
@@ -38,14 +40,14 @@ func NewOutboxFacade() *OutboxFacade {
 	return &OutboxFacade{db: dynamodb.NewFromConfig(cfg)}
 }
 
-func (of *OutboxFacade) seeder(index int) map[string]any {
+func (of *OutboxFacade) seeder(emlFilePath string) map[string]any {
 	id := uuid.NewString()
 	return map[string]any{
 		"Id":              id,
-		"Status":          "PENDING",
-		"EmlFilePath":     "testdata/smol.EML",
-		"SuccessCallback": fmt.Sprintf("curl -X /success/%v", index),
-		"FailureCallback": fmt.Sprintf("curl -X /failure/%v", index),
+		"Status":          "READY",
+		"EmlFilePath":     emlFilePath,
+		"SuccessCallback": fmt.Sprintf("curl -X /success/%s", id),
+		"FailureCallback": fmt.Sprintf("curl -X /failure/%s", id),
 	}
 }
 
@@ -58,9 +60,12 @@ func (of *OutboxFacade) getMetaAttributes(email map[string]any) map[string]any {
 	}
 }
 
-func (of *OutboxFacade) AddEmail(ctx context.Context) (string, error) {
+func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (string, error) {
+	if emlFilePath == "" {
+		emlFilePath = "testdata/smol.EML"
+	}
 	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", tableName)
-	email := of.seeder(0)
+	email := of.seeder(emlFilePath)
 	metaAttrs := of.getMetaAttributes(email)
 	metaParams, err := attributevalue.MarshalList([]any{
 		email["Id"], statusMeta, metaAttrs,
@@ -86,4 +91,30 @@ func (of *OutboxFacade) AddEmail(ctx context.Context) (string, error) {
 
 	_, err = of.db.ExecuteTransaction(ctx, ti)
 	return fmt.Sprint(email["Id"]), err
+}
+
+func (of *OutboxFacade) AddEmlFile(destDirPath string) (string, error) {
+	srcFile, err := os.Open("testdata/sample.eml")
+	if err != nil {
+		return "", err
+	}
+	defer srcFile.Close()
+
+	if destDirPath == "" {
+		destDirPath = "/"
+	}
+	if !strings.HasSuffix(destDirPath, "/") {
+		destDirPath += "/"
+	}
+
+	destFilePath := fmt.Sprintf("%s%s.eml", destDirPath, uuid.NewString())
+
+	destFile, err := os.Create(destFilePath)
+	if err != nil {
+		return destFilePath, err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, srcFile)
+	return destFilePath, err
 }

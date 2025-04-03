@@ -20,7 +20,11 @@ services:
       SMTP_PORT: '1025'
       SMTP_FROM: 'mailer@example.com'
       SMTP_ALLOW_INSECURE_TLS: 'true'
-    command: ['sh', '-c', 'go mod tidy && go test ./... -p=1']
+    command: >
+      sh -c "go mod tidy &&
+             go test ./... -tags=repository &&
+             go test ./... -tags=integration &&
+             go test ./... -tags=unit"
     volumes:
       - ./.cache/go:/go/pkg/mod:cached
       - .:/app

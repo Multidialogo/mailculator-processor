@@ -20,7 +20,13 @@ coverage() {
   export SMTP_ALLOW_INSECURE_TLS=true
 
   go mod tidy
-  go test $(go list ./... | grep -v testutils) -coverprofile=$temp_path -p=1
+  test_packages=$(go list ./... | grep -v testutils)
+  echo '\033[1;35mRun repository tests:\033[0m'
+  go test $test_packages -tags=repository | grep -v '\[no test files\]'
+  echo '\033[1;35mRun integration tests:\033[0m'
+  go test $test_packages -tags=integration | grep -v '\[no test files\]'
+  echo '\033[1;35mRun unit tests:\033[0m'
+  go test $test_packages -tags=unit -coverprofile=$temp_path
 
   cov=$(go tool cover -func $temp_path | grep -E "^total" | grep -o -E "[0-9]*\.[0-9]*%$")
   echo "Total coverage: ${cov}"

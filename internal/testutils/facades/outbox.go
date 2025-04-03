@@ -10,13 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 	"io"
+	"log"
 	"os"
 	"strings"
-)
-
-const (
-	tableName  = "Outbox"
-	statusMeta = "_META"
 )
 
 func NewAwsConfigFromEnv() aws.Config {
@@ -32,12 +28,25 @@ func NewAwsConfigFromEnv() aws.Config {
 }
 
 type OutboxFacade struct {
-	db *dynamodb.Client
+	db         *dynamodb.Client
+	tableName  string
+	statusMeta string
 }
 
-func NewOutboxFacade() *OutboxFacade {
+func NewOutboxFacade(tableName string, statusMeta string) (*OutboxFacade, error) {
+	var err error = nil
+	if tableName == "" {
+		err = fmt.Errorf("table name is required")
+	}
+	if statusMeta == "" {
+		err = fmt.Errorf("status meta is required")
+	}
 	cfg := NewAwsConfigFromEnv()
-	return &OutboxFacade{db: dynamodb.NewFromConfig(cfg)}
+	return &OutboxFacade{
+		db:         dynamodb.NewFromConfig(cfg),
+		tableName:  tableName,
+		statusMeta: statusMeta,
+	}, err
 }
 
 func (of *OutboxFacade) seeder(emlFilePath string) map[string]any {
@@ -46,8 +55,8 @@ func (of *OutboxFacade) seeder(emlFilePath string) map[string]any {
 		"Id":              id,
 		"Status":          "READY",
 		"EmlFilePath":     emlFilePath,
-		"SuccessCallback": fmt.Sprintf("curl -X /success/%s", id),
-		"FailureCallback": fmt.Sprintf("curl -X /failure/%s", id),
+		"SuccessCallback": fmt.Sprintf("echo 'OK %s'", id),
+		"FailureCallback": fmt.Sprintf("echo 'KO %s'", id),
 	}
 }
 
@@ -64,17 +73,17 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 	if emlFilePath == "" {
 		emlFilePath = "testdata/smol.EML"
 	}
-	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", tableName)
+	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", of.tableName)
 	email := of.seeder(emlFilePath)
 	metaAttrs := of.getMetaAttributes(email)
 	metaParams, err := attributevalue.MarshalList([]any{
-		email["Id"], statusMeta, metaAttrs,
+		email["Id"], of.statusMeta, metaAttrs,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", tableName)
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", of.tableName)
 	inParams, err := attributevalue.MarshalList([]any{
 		email["Id"], email["Status"], map[string]any{},
 	})
@@ -117,4 +126,33 @@ func (of *OutboxFacade) AddEmlFile(destDirPath string) (string, error) {
 
 	_, err = io.Copy(destFile, srcFile)
 	return destFilePath, err
+}
+
+func (of *OutboxFacade) DeleteEmail(ctx context.Context, id string) error {
+	var err error = nil
+	if id == "" {
+		err = fmt.Errorf("id is required")
+		return err
+	}
+	query := fmt.Sprintf("SELECT Status FROM \"%v\" WHERE Id=?", of.tableName)
+	params, _ := attributevalue.MarshalList([]interface{}{id})
+	stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
+
+	res, err := of.db.ExecuteStatement(ctx, stmt)
+	if res != nil {
+		query = fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", of.tableName)
+		for _, item := range res.Items {
+			params, _ = attributevalue.MarshalList([]interface{}{
+				id,
+				item["Status"].(*types.AttributeValueMemberS).Value,
+			})
+			stmt = &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
+			_, err = of.db.ExecuteStatement(ctx, stmt)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
+
+	return err
 }

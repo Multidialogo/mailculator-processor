@@ -54,14 +54,14 @@ func NewFromYaml(filePath string) (*Config, error) {
 
 	reader := strings.NewReader(yamlString)
 
-	if err := config.Load(reader); err != nil {
+	if err := config.load(reader); err != nil {
 		return nil, err
 	}
 
 	return config, nil
 }
 
-func (c *Config) Load(r io.Reader) error {
+func (c *Config) load(r io.Reader) error {
 	decoder := yaml.NewDecoder(r)
 	decoder.KnownFields(true)
 

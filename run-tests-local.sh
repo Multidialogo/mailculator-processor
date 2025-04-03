@@ -17,9 +17,10 @@ coverage() {
   export SMTP_PASS=pass
   export SMTP_PORT=1025
   export SMTP_FROM=mailer@example.com
+  export SMTP_ALLOW_INSECURE_TLS=true
 
   go mod tidy
-  go test ./... -coverpkg=./... -coverprofile=$temp_path
+  go test $(go list ./... | grep -v testutils) -coverprofile=$temp_path -p=1
 
   cov=$(go tool cover -func $temp_path | grep -E "^total" | grep -o -E "[0-9]*\.[0-9]*%$")
   echo "Total coverage: ${cov}"

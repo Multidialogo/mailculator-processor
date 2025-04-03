@@ -1,3 +1,5 @@
+//go:build repository
+
 package outbox
 
 import (

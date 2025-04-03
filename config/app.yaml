@@ -14,3 +14,4 @@ smtp:
   user: "${SMTP_USER}"
   password: "${SMTP_PASS}"
   from: "${SMTP_FROM}"
+  allow_insecure_tls: ${SMTP_ALLOW_INSECURE_TLS}

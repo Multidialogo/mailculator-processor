@@ -1,4 +1,4 @@
-//go:build unit
+//go:build integration
 
 package smtp
 
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -32,17 +33,17 @@ func (suite *ClientTestSuite) SetupTest() {
 	suite.sut = New(cfg)
 }
 
-func (suite *ClientTestSuite) TestClientSendError() {
-	err := suite.sut.Send("testdata/missing.EML")
-	suite.Assert().Equal("open testdata/missing.EML: no such file or directory", err.Error())
-}
+func (suite *ClientTestSuite) TestClientSendIntegration() {
+	var wg sync.WaitGroup
 
-func (suite *ClientTestSuite) TestClientSendWithNoRecipient() {
-	err := suite.sut.Send("testdata/no_recipient.EML")
-	suite.Assert().Equal("could not find recipient in reader", err.Error())
-}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := suite.sut.Send("testdata/smol.EML")
+			suite.Require().NoError(err)
+		}()
+	}
 
-func (suite *ClientTestSuite) TestClientSendWithFakeRecipient() {
-	err := suite.sut.Send("testdata/fake_recipient.EML")
-	suite.Assert().Equal("mail: missing '@' or angle-addr", err.Error())
+	wg.Wait()
 }

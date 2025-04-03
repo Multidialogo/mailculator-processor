@@ -2,20 +2,17 @@ package outbox
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"mailculator-processor/internal/testutils/facades"
 )
 
-var fixtures map[string]string
+var fixtures []string
 
-func deleteFixtures(t *testing.T, db *dynamodb.Client) {
+func deleteFixtures(t *testing.T, of *facades.OutboxFacade) {
 	if len(fixtures) == 0 {
 		t.Log("no fixtures to delete")
 		return
@@ -23,13 +20,10 @@ func deleteFixtures(t *testing.T, db *dynamodb.Client) {
 
 	t.Logf("deleting fixtures: %v", fixtures)
 
-	query := fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", "Outbox")
-	for id, status := range fixtures {
-		params, _ := attributevalue.MarshalList([]interface{}{id, status})
-		stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
-
-		if _, err := db.ExecuteStatement(context.TODO(), stmt); err != nil {
-			t.Errorf("error while deleting fixture %s, error: %v", id, err)
+	for _, value := range fixtures {
+		err := of.DeleteEmail(context.Background(), value)
+		if err != nil {
+			t.Errorf("error while deleting fixture %s, error: %v", value, err)
 		}
 	}
 }
@@ -42,11 +36,10 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	awsConfig := facades.NewAwsConfigFromEnv()
 	db := dynamodb.NewFromConfig(awsConfig)
 	sut := NewOutbox(db)
+	of, err := facades.NewOutboxFacade(TableName, StatusMeta)
 
-	fixtures = map[string]string{}
-	defer deleteFixtures(t, db)
-
-	of := facades.NewOutboxFacade()
+	fixtures = make([]string, 0)
+	defer deleteFixtures(t, of)
 
 	// no record in db, should return 0
 	res, err := sut.Query(context.TODO(), StatusReady, 25)
@@ -56,11 +49,11 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	// insert two records in db
 	id, err := of.AddEmail(context.TODO(), "")
 	require.NoErrorf(t, err, "failed inserting id %s, error: %v", id, err)
-	fixtures[id] = StatusReady
+	fixtures = append(fixtures, id)
 
 	anotherId, err := of.AddEmail(context.TODO(), "")
 	require.NoErrorf(t, err, "failed inserting id %s, error: %v", anotherId, err)
-	fixtures[anotherId] = StatusReady
+	fixtures = append(fixtures, anotherId)
 
 	// filtering by status READY should return 2 records at this point
 	res, err = sut.Query(context.TODO(), StatusReady, 25)
@@ -80,7 +73,6 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	// update fixture to status PROCESSING
 	err = sut.Update(context.TODO(), id, StatusProcessing)
 	require.NoError(t, err)
-	fixtures[id] = StatusProcessing
 
 	// filtering by status READY should return 1 record at this point, with status READY
 	res, err = sut.Query(context.TODO(), StatusReady, 25)
@@ -101,7 +93,6 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	// status cannot be rolled back
 	err = sut.Update(context.TODO(), id, StatusReady)
 	if err == nil {
-		fixtures[id] = StatusReady
 		t.Errorf("expected error, got nil")
 	}
 }

@@ -19,7 +19,8 @@ services:
       SMTP_PASS: 'pass'
       SMTP_PORT: '1025'
       SMTP_FROM: 'mailer@example.com'
-    command: ['sh', '-c', 'go mod tidy && go test ./...']
+      SMTP_ALLOW_INSECURE_TLS: 'true'
+    command: ['sh', '-c', 'go mod tidy && go test ./... -p=1']
     volumes:
       - ./.cache/go:/go/pkg/mod:cached
       - .:/app

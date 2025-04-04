@@ -4,8 +4,6 @@ package smtp
 
 import (
 	"github.com/stretchr/testify/suite"
-	"os"
-	"strconv"
 	"testing"
 )
 
@@ -19,15 +17,7 @@ type ClientTestSuite struct {
 }
 
 func (suite *ClientTestSuite) SetupTest() {
-	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
-	cfg := Config{
-		User:             os.Getenv("SMTP_USER"),
-		Password:         os.Getenv("SMTP_PASS"),
-		Host:             os.Getenv("SMTP_HOST"),
-		Port:             port,
-		From:             os.Getenv("SMTP_FROM"),
-		AllowInsecureTls: true,
-	}
+	cfg := Config{User: "", Password: "", Host: "smtp.gmail.com", Port: 587, From: "", AllowInsecureTls: false}
 
 	suite.sut = New(cfg)
 }

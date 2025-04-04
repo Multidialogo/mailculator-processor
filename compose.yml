@@ -22,9 +22,9 @@ services:
       SMTP_ALLOW_INSECURE_TLS: 'true'
     command: >
       sh -c "go mod tidy &&
+             ./scripts/coverage.sh unit &&
              go test ./... -tags=repository &&
-             go test ./... -tags=integration &&
-             go test ./... -tags=unit"
+             go test ./... -tags=integration"
     volumes:
       - ./.cache/go:/go/pkg/mod:cached
       - .:/app

@@ -6,12 +6,10 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/go-playground/validator/v10"
-	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
 
@@ -22,9 +20,9 @@ type AwsConfig struct {
 	Region       string `yaml:"region" validate:"required"`
 }
 
-type CallbacksConfig struct {
-	MaxRetries    int `yaml:"max_retries" validate:"required"`
-	RetryInterval int `yaml:"retry_interval" validate:"required"`
+type Pipeline struct {
+	Interval    int    `yaml:"interval" validate:"required"`
+	CallbackUrl string `yaml:"callback_url" validate:"required"`
 }
 
 type SmtpConfig struct {
@@ -37,9 +35,9 @@ type SmtpConfig struct {
 }
 
 type Config struct {
-	Aws       AwsConfig       `yaml:"aws,flow" validate:"required"`
-	Callbacks CallbacksConfig `yaml:"callbacks,flow" validate:"required"`
-	Smtp      SmtpConfig      `yaml:"smtp,flow" validate:"required"`
+	Aws      AwsConfig  `yaml:"aws,flow" validate:"required"`
+	Pipeline Pipeline   `yaml:"pipeline" validate:"required"`
+	Smtp     SmtpConfig `yaml:"smtp,flow" validate:"required"`
 }
 
 func NewFromYaml(filePath string) (*Config, error) {
@@ -100,11 +98,12 @@ func (c *Config) GetAwsConfig() aws.Config {
 	return cfg
 }
 
-func (c *Config) GetCallbackPipelineConfig() pipeline.CallbackConfig {
-	return pipeline.CallbackConfig{
-		MaxRetries:    c.Callbacks.MaxRetries,
-		RetryInterval: time.Duration(c.Callbacks.RetryInterval),
-	}
+func (c *Config) GetPipelineInterval() int {
+	return c.Pipeline.Interval
+}
+
+func (c *Config) GetPipelineCallbackUrl() string {
+	return c.Pipeline.CallbackUrl
 }
 
 func (c *Config) GetSmtpConfig() smtp.Config {

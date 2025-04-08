@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -28,11 +29,11 @@ const (
 )
 
 type Email struct {
-	Id              string
-	Status          string
-	EmlFilePath     string
-	SuccessCallback string
-	FailureCallback string
+	Id          string
+	Status      string
+	EmlFilePath string
+	UpdatedAt   string
+	Reason      string
 }
 
 type dynamodbInterface interface {
@@ -50,12 +51,11 @@ func NewOutbox(db *dynamodb.Client) *Outbox {
 
 func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, error) {
 	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", TableName, statusIndex)
-	params, _ := attributevalue.MarshalList([]interface{}{StatusMeta, status})
+	params, _ := attributevalue.MarshalList([]any{StatusMeta, status})
 
 	stmt := &dynamodb.ExecuteStatementInput{
 		Parameters: params,
 		Statement:  aws.String(query),
-		Limit:      aws.Int32(int32(limit)),
 	}
 
 	res, err := o.db.ExecuteStatement(ctx, stmt)
@@ -63,15 +63,25 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 		return []Email{}, err
 	}
 
+	if len(res.Items) > limit {
+		res.Items = append([]map[string]types.AttributeValue{}, res.Items[:limit]...)
+	}
+
 	return new(emailMarshaller).UnmarshalList(res.Items)
 }
 
-func (o *Outbox) Update(ctx context.Context, id string, status string) error {
-	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=? WHERE Id=? AND Status=?", TableName)
-	metaParams, _ := attributevalue.MarshalList([]interface{}{status, id, StatusMeta})
+func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {
+	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", TableName)
+	metaParams, _ := attributevalue.MarshalList([]any{
+		status,
+		time.Now().Format(time.RFC3339),
+		errorReason,
+		id,
+		StatusMeta,
+	})
 
 	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", TableName)
-	inParams, _ := attributevalue.MarshalList([]interface{}{id, status, map[string]interface{}{}})
+	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}})
 
 	ti := &dynamodb.ExecuteTransactionInput{
 		TransactStatements: []types.ParameterizedStatement{
@@ -85,9 +95,9 @@ func (o *Outbox) Update(ctx context.Context, id string, status string) error {
 }
 
 type emailItemRow struct {
-	Id         string                 `dynamodbav:"Id"`
-	Status     string                 `dynamodbav:"Status"`
-	Attributes map[string]interface{} `dynamodbav:"Attributes"`
+	Id         string         `dynamodbav:"Id"`
+	Status     string         `dynamodbav:"Status"`
+	Attributes map[string]any `dynamodbav:"Attributes"`
 }
 
 type emailMarshaller struct{}
@@ -101,11 +111,11 @@ func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeVa
 
 	for _, item := range items {
 		emails = append(emails, Email{
-			Id:              item.Id,
-			Status:          fmt.Sprint(item.Attributes["Latest"]),
-			EmlFilePath:     fmt.Sprint(item.Attributes["EMLFilePath"]),
-			SuccessCallback: fmt.Sprint(item.Attributes["SuccessCallback"]),
-			FailureCallback: fmt.Sprint(item.Attributes["FailureCallback"]),
+			Id:          item.Id,
+			Status:      fmt.Sprint(item.Attributes["Latest"]),
+			EmlFilePath: fmt.Sprint(item.Attributes["EMLFilePath"]),
+			UpdatedAt:   fmt.Sprint(item.Attributes["UpdatedAt"]),
+			Reason:      fmt.Sprint(item.Attributes["Reason"]),
 		})
 	}
 

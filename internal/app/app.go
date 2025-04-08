@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -16,12 +17,14 @@ type pipelineProcessor interface {
 }
 
 type App struct {
-	pipes []pipelineProcessor
+	pipes    []pipelineProcessor
+	interval int
 }
 
 type configProvider interface {
 	GetAwsConfig() aws.Config
-	GetCallbackPipelineConfig() pipeline.CallbackConfig
+	GetPipelineInterval() int
+	GetPipelineCallbackUrl() string
 	GetSmtpConfig() smtp.Config
 }
 
@@ -31,11 +34,12 @@ func New(cp configProvider) (*App, error) {
 	outboxService := outbox.NewOutbox(db)
 
 	mainSenderPipe := pipeline.NewMainSenderPipeline(outboxService, client)
-	sentCallbackPipe := pipeline.NewSentCallbackPipeline(cp.GetCallbackPipelineConfig(), outboxService)
-	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(cp.GetCallbackPipelineConfig(), outboxService)
+	callbackUrl := cp.GetPipelineCallbackUrl()
+	sentCallbackPipe := pipeline.NewSentCallbackPipeline(outboxService, callbackUrl)
+	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(outboxService, callbackUrl)
 
 	pipes := []pipelineProcessor{mainSenderPipe, sentCallbackPipe, failedCallbackPipe}
-	return &App{pipes: pipes}, nil
+	return &App{pipes: pipes, interval: cp.GetPipelineInterval()}, nil
 }
 
 func (a *App) Run(ctx context.Context) {
@@ -45,14 +49,14 @@ func (a *App) Run(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			a.runPipelineUntilContextIsDone(ctx, proc)
+			a.runPipelineUntilContextIsDone(ctx, proc, a.interval)
 		}()
 	}
 
 	wg.Wait()
 }
 
-func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelineProcessor) {
+func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelineProcessor, interval int) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -60,5 +64,6 @@ func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelinePr
 		default:
 			proc.Process(ctx)
 		}
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }

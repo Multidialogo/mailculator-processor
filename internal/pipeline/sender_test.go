@@ -38,7 +38,7 @@ func (m *senderMock) Send(emlFilePath string) error {
 
 func (suite *SenderTestSuite) TestSucceededSendEmails() {
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: "", SuccessCallback: "", FailureCallback: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
 	)
 	senderServiceMock := newSenderMock(nil)
 	buf, logger := mocks.NewLoggerMock()
@@ -64,7 +64,7 @@ func (suite *SenderTestSuite) TestQueryError() {
 func (suite *SenderTestSuite) TestUpdateError() {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: "", SuccessCallback: "", FailureCallback: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 	)
 	senderServiceMock := newSenderMock(nil)
@@ -82,7 +82,7 @@ func (suite *SenderTestSuite) TestUpdateError() {
 func (suite *SenderTestSuite) TestSendEmailError() {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: "", SuccessCallback: "", FailureCallback: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
 	)
 	senderServiceMock := newSenderMock(errors.New("some send error"))
 	sender := MainSenderPipeline{outboxServiceMock, senderServiceMock, logger}
@@ -99,7 +99,7 @@ func (suite *SenderTestSuite) TestSendEmailError() {
 func (suite *SenderTestSuite) TestHandleUpdateError() {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: "", SuccessCallback: "", FailureCallback: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 		mocks.UpdateMethodFailsCall(2),
 	)

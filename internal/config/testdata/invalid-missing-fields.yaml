@@ -3,9 +3,9 @@ aws:
   secret: dummy-secret
   region: "dummy-region-with-quotation-marks"
 
-callbacks:
-  max_retries: 3
-  retry_interval: 5
+pipeline:
+  interval: 3
+  callback_url: "dummy-domain.com"
 
 smtp:
   port: 12345

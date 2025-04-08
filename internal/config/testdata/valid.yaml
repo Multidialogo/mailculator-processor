@@ -4,9 +4,9 @@ aws:
   region: "dummy-region-with-quotation-marks"
   base_endpoint: dummy-base-endpoint
 
-callbacks:
-  max_retries: 3
-  retry_interval: 5
+pipeline:
+  interval: 3
+  callback_url: "dummy-domain.com"
 
 smtp:
   host: dummy-host

@@ -73,7 +73,7 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	require.Len(t, res, 0)
 
 	// update fixture to status PROCESSING
-	err = sut.Update(context.TODO(), id, StatusProcessing)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "")
 	require.NoError(t, err)
 
 	// filtering by status READY should return 1 record at this point, with status READY
@@ -89,11 +89,11 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	assert.Equal(t, StatusProcessing, res[0].Status)
 
 	// item already is in status PROCESSING, so it should return error
-	err = sut.Update(context.TODO(), id, StatusProcessing)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "")
 	assert.Error(t, err)
 
 	// status cannot be rolled back
-	err = sut.Update(context.TODO(), id, StatusReady)
+	err = sut.Update(context.TODO(), id, StatusReady, "")
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}

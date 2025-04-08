@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 func NewAwsConfigFromEnv() aws.Config {
@@ -49,44 +50,28 @@ func NewOutboxFacade(tableName string, statusMeta string) (*OutboxFacade, error)
 	}, err
 }
 
-func (of *OutboxFacade) seeder(emlFilePath string) map[string]any {
-	id := uuid.NewString()
-	return map[string]any{
-		"Id":              id,
-		"Status":          "READY",
-		"EmlFilePath":     emlFilePath,
-		"SuccessCallback": fmt.Sprintf("echo 'OK %s'", id),
-		"FailureCallback": fmt.Sprintf("echo 'KO %s'", id),
-	}
-}
-
-func (of *OutboxFacade) getMetaAttributes(email map[string]any) map[string]any {
-	return map[string]any{
-		"Latest":          email["Status"],
-		"EMLFilePath":     email["EmlFilePath"],
-		"SuccessCallback": email["SuccessCallback"],
-		"FailureCallback": email["FailureCallback"],
-	}
-}
-
 func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (string, error) {
 	if emlFilePath == "" {
 		emlFilePath = "testdata/smol.EML"
 	}
 	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", of.tableName)
-	email := of.seeder(emlFilePath)
-	metaAttrs := of.getMetaAttributes(email)
+	id := uuid.NewString()
+	status := "READY"
 	metaParams, err := attributevalue.MarshalList([]any{
-		email["Id"], of.statusMeta, metaAttrs,
+		id,
+		of.statusMeta,
+		map[string]any{
+			"Latest":      status,
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": emlFilePath,
+		},
 	})
 	if err != nil {
 		return "", err
 	}
 
 	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", of.tableName)
-	inParams, err := attributevalue.MarshalList([]any{
-		email["Id"], email["Status"], map[string]any{},
-	})
+	inParams, err := attributevalue.MarshalList([]any{id, status, map[string]any{}})
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +84,7 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 	}
 
 	_, err = of.db.ExecuteTransaction(ctx, ti)
-	return fmt.Sprint(email["Id"]), err
+	return id, err
 }
 
 func (of *OutboxFacade) AddEmlFile(destDirPath string) (string, error) {
@@ -135,14 +120,14 @@ func (of *OutboxFacade) DeleteEmail(ctx context.Context, id string) error {
 		return err
 	}
 	query := fmt.Sprintf("SELECT Status FROM \"%v\" WHERE Id=?", of.tableName)
-	params, _ := attributevalue.MarshalList([]interface{}{id})
+	params, _ := attributevalue.MarshalList([]any{id})
 	stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
 
 	res, err := of.db.ExecuteStatement(ctx, stmt)
 	if res != nil {
 		query = fmt.Sprintf("DELETE FROM \"%v\" WHERE Id=? AND Status=?", of.tableName)
 		for _, item := range res.Items {
-			params, _ = attributevalue.MarshalList([]interface{}{
+			params, _ = attributevalue.MarshalList([]any{
 				id,
 				item["Status"].(*types.AttributeValueMemberS).Value,
 			})

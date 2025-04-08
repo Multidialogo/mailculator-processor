@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -35,10 +36,9 @@ func TestQuery_WhenDatabaseHasRecord_ShouldReturnMarshalledEmail(t *testing.T) {
 		"Id":     "12345",
 		"Status": "_META",
 		"Attributes": map[string]interface{}{
-			"Latest":          "PENDING",
-			"EMLFilePath":     "/efs/email.eml",
-			"SuccessCallback": "curl http://localhost:8000/success",
-			"FailureCallback": "curl http://localhost:8000/failure",
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
 		},
 	})
 
@@ -53,7 +53,43 @@ func TestQuery_WhenDatabaseHasRecord_ShouldReturnMarshalledEmail(t *testing.T) {
 	actual, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.NoError(t, err)
 	require.Len(t, actual, 1)
-	assert.Equal(t, actual[0].Status, "PENDING")
+	assert.Equal(t, actual[0].Status, "READY")
+}
+
+func TestQueryLimit(t *testing.T) {
+	t.Parallel()
+
+	record1, _ := attributevalue.MarshalMap(map[string]interface{}{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]interface{}{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+		},
+	})
+	record2, _ := attributevalue.MarshalMap(map[string]interface{}{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]interface{}{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+		},
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record1, record2},
+		},
+	}
+
+	sut := NewOutbox(nil)
+	sut.db = dbMock
+
+	actual, err := sut.Query(context.TODO(), "ANY", 1)
+	assert.NoError(t, err)
+	require.Len(t, actual, 1)
 }
 
 func TestQuery_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
@@ -73,7 +109,7 @@ func TestUpdate_WhenDatabaseReturnNoError_ShouldReturnNoError(t *testing.T) {
 	dbMock := &dynamodbMock{transactionOutput: &dynamodb.ExecuteTransactionOutput{}}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "PENDING")
+	err := sut.Update(context.TODO(), "12345", "READY", "")
 	assert.NoError(t, err)
 }
 
@@ -84,6 +120,6 @@ func TestUpdate_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
 	dbMock := &dynamodbMock{returnError: expectedError}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "PENDING")
+	err := sut.Update(context.TODO(), "12345", "READY", "")
 	assert.ErrorIs(t, expectedError, err)
 }

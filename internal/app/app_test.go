@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/stretchr/testify/suite"
-	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 	"testing"
 	"time"
@@ -35,8 +34,12 @@ func (cp *configProviderMock) GetAwsConfig() aws.Config {
 	}
 }
 
-func (cp *configProviderMock) GetCallbackPipelineConfig() pipeline.CallbackConfig {
-	return pipeline.CallbackConfig{MaxRetries: 2, RetryInterval: 3}
+func (cp *configProviderMock) GetPipelineInterval() int {
+	return 1
+}
+
+func (cp *configProviderMock) GetPipelineCallbackUrl() string {
+	return "dummy-domain.com"
 }
 
 func (cp *configProviderMock) GetSmtpConfig() smtp.Config {

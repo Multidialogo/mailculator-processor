@@ -32,10 +32,10 @@ func (m *dynamodbMock) ExecuteTransaction(_ context.Context, _ *dynamodb.Execute
 func TestQuery_WhenDatabaseHasRecord_ShouldReturnMarshalledEmail(t *testing.T) {
 	t.Parallel()
 
-	record, _ := attributevalue.MarshalMap(map[string]interface{}{
+	record, _ := attributevalue.MarshalMap(map[string]any{
 		"Id":     "12345",
 		"Status": "_META",
-		"Attributes": map[string]interface{}{
+		"Attributes": map[string]any{
 			"Latest":      "READY",
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": "/efs/email.eml",
@@ -59,19 +59,19 @@ func TestQuery_WhenDatabaseHasRecord_ShouldReturnMarshalledEmail(t *testing.T) {
 func TestQueryLimit(t *testing.T) {
 	t.Parallel()
 
-	record1, _ := attributevalue.MarshalMap(map[string]interface{}{
+	record1, _ := attributevalue.MarshalMap(map[string]any{
 		"Id":     "12345",
 		"Status": "_META",
-		"Attributes": map[string]interface{}{
+		"Attributes": map[string]any{
 			"Latest":      "READY",
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": "/efs/email.eml",
 		},
 	})
-	record2, _ := attributevalue.MarshalMap(map[string]interface{}{
+	record2, _ := attributevalue.MarshalMap(map[string]any{
 		"Id":     "12345",
 		"Status": "_META",
-		"Attributes": map[string]interface{}{
+		"Attributes": map[string]any{
 			"Latest":      "READY",
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": "/efs/email.eml",

@@ -3,23 +3,16 @@
 package smtp
 
 import (
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
 )
 
-func TestClientTestSuite(t *testing.T) {
-	suite.Run(t, &ClientTestSuite{})
-}
+var client *Client
 
-type ClientTestSuite struct {
-	suite.Suite
-	sut *Client
-}
-
-func (suite *ClientTestSuite) SetupTest() {
+func init() {
 	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	cfg := Config{
 		User:             os.Getenv("SMTP_USER"),
@@ -30,18 +23,18 @@ func (suite *ClientTestSuite) SetupTest() {
 		AllowInsecureTls: true,
 	}
 
-	suite.sut = New(cfg)
+	client = New(cfg)
 }
 
-func (suite *ClientTestSuite) TestClientSendIntegration() {
+func TestClientSendIntegration(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := suite.sut.Send("testdata/smol.EML")
-			suite.Require().NoError(err)
+			err := client.Send("testdata/smol.EML")
+			require.NoError(t, err)
 		}()
 	}
 

@@ -6,19 +6,12 @@ import (
 	"context"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"mailculator-processor/internal/smtp"
 	"testing"
 	"time"
 )
-
-func TestAppTestSuite(t *testing.T) {
-	suite.Run(t, &AppTestSuite{})
-}
-
-type AppTestSuite struct {
-	suite.Suite
-}
 
 type configProviderMock struct{}
 
@@ -53,13 +46,13 @@ func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
 	}
 }
 
-func (suite *AppTestSuite) TestAppInstance() {
+func TestAppInstance(t *testing.T) {
 	app, errNew := New(newConfigProviderMock())
-	suite.Require().NoError(errNew)
-	suite.Require().Equal(3, len(app.pipes))
-	suite.Assert().NotZero(app.pipes[0])
-	suite.Assert().NotZero(app.pipes[1])
-	suite.Assert().NotZero(app.pipes[2])
+	require.NoError(t, errNew)
+	require.Equal(t, 3, len(app.pipes))
+	assert.NotZero(t, app.pipes[0])
+	assert.NotZero(t, app.pipes[1])
+	assert.NotZero(t, app.pipes[2])
 }
 
 type processorMock struct {
@@ -76,7 +69,7 @@ func (t *processorMock) Process(ctx context.Context) {
 	t.calls++
 }
 
-func (suite *AppTestSuite) TestRunFunction() {
+func TestRunFunction(t *testing.T) {
 	proc1 := newProcessorMock(200)
 	proc2 := newProcessorMock(200)
 	app := &App{pipes: []pipelineProcessor{proc1, proc2}}
@@ -85,6 +78,6 @@ func (suite *AppTestSuite) TestRunFunction() {
 	defer cancel()
 	app.Run(ctx)
 
-	suite.Assert().Equal(1, proc1.calls)
-	suite.Assert().Equal(1, proc2.calls)
+	assert.Equal(t, 1, proc1.calls)
+	assert.Equal(t, 1, proc2.calls)
 }

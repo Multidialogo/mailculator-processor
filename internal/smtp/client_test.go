@@ -3,36 +3,29 @@
 package smtp
 
 import (
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestClientTestSuite(t *testing.T) {
-	suite.Run(t, &ClientTestSuite{})
-}
+var client *Client
 
-type ClientTestSuite struct {
-	suite.Suite
-	sut *Client
-}
-
-func (suite *ClientTestSuite) SetupTest() {
+func init() {
 	cfg := Config{User: "", Password: "", Host: "smtp.gmail.com", Port: 587, From: "", AllowInsecureTls: false}
 
-	suite.sut = New(cfg)
+	client = New(cfg)
 }
 
-func (suite *ClientTestSuite) TestClientSendError() {
-	err := suite.sut.Send("testdata/missing.EML")
-	suite.Assert().Equal("open testdata/missing.EML: no such file or directory", err.Error())
+func TestClientSendError(t *testing.T) {
+	err := client.Send("testdata/missing.EML")
+	assert.Equal(t, "open testdata/missing.EML: no such file or directory", err.Error())
 }
 
-func (suite *ClientTestSuite) TestClientSendWithNoRecipient() {
-	err := suite.sut.Send("testdata/no_recipient.EML")
-	suite.Assert().Equal("could not find recipient in reader", err.Error())
+func TestClientSendWithNoRecipient(t *testing.T) {
+	err := client.Send("testdata/no_recipient.EML")
+	assert.Equal(t, "could not find recipient in reader", err.Error())
 }
 
-func (suite *ClientTestSuite) TestClientSendWithFakeRecipient() {
-	err := suite.sut.Send("testdata/fake_recipient.EML")
-	suite.Assert().Equal("mail: missing '@' or angle-addr", err.Error())
+func TestClientSendWithFakeRecipient(t *testing.T) {
+	err := client.Send("testdata/fake_recipient.EML")
+	assert.Equal(t, "mail: missing '@' or angle-addr", err.Error())
 }

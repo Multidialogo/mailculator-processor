@@ -9,12 +9,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/stretchr/testify/assert"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/testutils/facades"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +39,7 @@ func TestMainComplete(t *testing.T) {
 	db := dynamodb.NewFromConfig(awsConfig)
 	for _, value := range fixtures {
 		query := fmt.Sprintf("SELECT Attributes.Latest FROM \"%v\" WHERE Id=? AND Status=?", outbox.TableName)
-		params, _ := attributevalue.MarshalList([]interface{}{value, outbox.StatusMeta})
+		params, _ := attributevalue.MarshalList([]any{value, outbox.StatusMeta})
 		stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
 		res, midErr := db.ExecuteStatement(context.TODO(), stmt)
 		require.NoError(t, midErr)

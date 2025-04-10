@@ -5,20 +5,12 @@ package pipeline
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/assert"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/testutils/mocks"
 	"strings"
 	"testing"
 )
-
-func TestSenderTestSuite(t *testing.T) {
-	suite.Run(t, &SenderTestSuite{})
-}
-
-type SenderTestSuite struct {
-	suite.Suite
-}
 
 type senderMock struct {
 	sendMethodError   error
@@ -36,7 +28,7 @@ func (m *senderMock) Send(emlFilePath string) error {
 	return m.sendMethodError
 }
 
-func (suite *SenderTestSuite) TestSucceededSendEmails() {
+func TestSucceededSendEmails(t *testing.T) {
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
 	)
@@ -45,11 +37,11 @@ func (suite *SenderTestSuite) TestSucceededSendEmails() {
 	sender := NewMainSenderPipeline(outboxServiceMock, senderServiceMock)
 	sender.logger = logger
 	sender.Process(context.TODO())
-	suite.Assert().Equal(1, senderServiceMock.sendMethodCounter)
-	suite.Assert().Equal("level=INFO msg=\"processing outbox 1\"\nlevel=INFO msg=\"successfully sent\" outbox=1", strings.TrimSpace(buf.String()))
+	assert.Equal(t, 1, senderServiceMock.sendMethodCounter)
+	assert.Equal(t, "level=INFO msg=\"processing outbox 1\"\nlevel=INFO msg=\"successfully sent\" outbox=1", strings.TrimSpace(buf.String()))
 }
 
-func (suite *SenderTestSuite) TestQueryError() {
+func TestQueryEmailError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(mocks.QueryMethodError(errors.New("some query error")))
 	senderServiceMock := newSenderMock(nil)
@@ -57,11 +49,11 @@ func (suite *SenderTestSuite) TestQueryError() {
 
 	sender.Process(context.TODO())
 
-	suite.Assert().Equal(0, senderServiceMock.sendMethodCounter)
-	suite.Assert().Equal("level=ERROR msg=\"error while querying emails to process: some query error\"", strings.TrimSpace(buf.String()))
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Equal(t, "level=ERROR msg=\"error while querying emails to process: some query error\"", strings.TrimSpace(buf.String()))
 }
 
-func (suite *SenderTestSuite) TestUpdateError() {
+func TestUpdateError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
@@ -72,14 +64,14 @@ func (suite *SenderTestSuite) TestUpdateError() {
 
 	sender.Process(context.TODO())
 
-	suite.Assert().Equal(0, senderServiceMock.sendMethodCounter)
-	suite.Assert().Equal(
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Equal(t,
 		"level=INFO msg=\"processing outbox 1\"\nlevel=WARN msg=\"failed to acquire processing lock, error: some update error\" outbox=1",
 		strings.TrimSpace(buf.String()),
 	)
 }
 
-func (suite *SenderTestSuite) TestSendEmailError() {
+func TestSendEmailError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
@@ -89,14 +81,14 @@ func (suite *SenderTestSuite) TestSendEmailError() {
 
 	sender.Process(context.TODO())
 
-	suite.Assert().Equal(0, senderServiceMock.sendMethodCounter)
-	suite.Assert().Equal(
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Equal(t,
 		"level=INFO msg=\"processing outbox 1\"\nlevel=ERROR msg=\"failed to send, error: some send error\" outbox=1",
 		strings.TrimSpace(buf.String()),
 	)
 }
 
-func (suite *SenderTestSuite) TestHandleUpdateError() {
+func TestHandleUpdateError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
@@ -108,8 +100,8 @@ func (suite *SenderTestSuite) TestHandleUpdateError() {
 
 	sender.Process(context.TODO())
 
-	suite.Assert().Equal(1, senderServiceMock.sendMethodCounter)
-	suite.Assert().Equal(
+	assert.Equal(t, 1, senderServiceMock.sendMethodCounter)
+	assert.Equal(t,
 		"level=INFO msg=\"processing outbox 1\"\nlevel=INFO msg=\"successfully sent\" outbox=1\nlevel=ERROR msg=\"error updating status to SENT, error: some update error\" outbox=1",
 		strings.TrimSpace(buf.String()),
 	)

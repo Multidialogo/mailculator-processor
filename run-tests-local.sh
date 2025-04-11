@@ -17,7 +17,7 @@ export SMTP_PORT=1025
 export SMTP_FROM=mailer@example.com
 export SMTP_ALLOW_INSECURE_TLS=true
 export PIPELINE_INTERVAL=1
-export PIPELINE_CALLBACK_URL=dummy-domain.com
+export PIPELINE_CALLBACK_URL=http://127.0.0.1:8080
 
 if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --build --force-recreate; then
   echo "Could not start test dependencies"

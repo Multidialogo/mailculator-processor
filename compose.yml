@@ -21,7 +21,7 @@ services:
       SMTP_FROM: 'mailer@example.com'
       SMTP_ALLOW_INSECURE_TLS: 'true'
       PIPELINE_INTERVAL: '1'
-      PIPELINE_CALLBACK_URL: 'dummy-domain.com'
+      PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
     command: >
       sh -c "go mod tidy &&
              ./scripts/coverage.sh unit &&

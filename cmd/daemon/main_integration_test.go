@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/testutils/facades"
+	"net/http"
 	"testing"
 	"time"
 
@@ -31,9 +32,21 @@ func TestMainComplete(t *testing.T) {
 		fixtures = append(fixtures, emailId)
 	}
 
+	srv := &http.Server{
+		Addr: ":8080",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Method error: expected POST received %s", r.Method)
+			}
+			w.WriteHeader(http.StatusOK)
+		}),
+	}
+	go srv.ListenAndServe()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	run(ctx)
+	srv.Shutdown(ctx)
 
 	awsConfig := facades.NewAwsConfigFromEnv()
 	db := dynamodb.NewFromConfig(awsConfig)

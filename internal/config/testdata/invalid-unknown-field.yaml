@@ -5,9 +5,13 @@ aws:
   base_endpoint: dummy-base-endpoint
   sus: "hello"
 
+callback:
+  max_retries: 3
+  retry_interval: 5
+  url: "dummy-domain.com"
+
 pipeline:
   interval: 3
-  callback_url: "dummy-domain.com"
 
 smtp:
   host: dummy-host

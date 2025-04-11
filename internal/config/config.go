@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
+	"mailculator-processor/internal/pipeline"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -20,9 +22,14 @@ type AwsConfig struct {
 	Region       string `yaml:"region" validate:"required"`
 }
 
-type Pipeline struct {
-	Interval    int    `yaml:"interval" validate:"required"`
-	CallbackUrl string `yaml:"callback_url" validate:"required"`
+type CallbacksConfig struct {
+	MaxRetries    int    `yaml:"max_retries" validate:"required"`
+	RetryInterval int    `yaml:"retry_interval" validate:"required"`
+	Url           string `yaml:"url" validate:"required"`
+}
+
+type PipelineConfig struct {
+	Interval int `yaml:"interval" validate:"required"`
 }
 
 type SmtpConfig struct {
@@ -35,9 +42,10 @@ type SmtpConfig struct {
 }
 
 type Config struct {
-	Aws      AwsConfig  `yaml:"aws,flow" validate:"required"`
-	Pipeline Pipeline   `yaml:"pipeline" validate:"required"`
-	Smtp     SmtpConfig `yaml:"smtp,flow" validate:"required"`
+	Aws      AwsConfig       `yaml:"aws,flow" validate:"required"`
+	Callback CallbacksConfig `yaml:"callback" validate:"required"`
+	Pipeline PipelineConfig  `yaml:"pipeline" validate:"required"`
+	Smtp     SmtpConfig      `yaml:"smtp,flow" validate:"required"`
 }
 
 func NewFromYaml(filePath string) (*Config, error) {
@@ -52,7 +60,7 @@ func NewFromYaml(filePath string) (*Config, error) {
 
 	reader := strings.NewReader(yamlString)
 
-	if err := config.load(reader); err != nil {
+	if err = config.load(reader); err != nil {
 		return nil, err
 	}
 
@@ -98,12 +106,16 @@ func (c *Config) GetAwsConfig() aws.Config {
 	return cfg
 }
 
-func (c *Config) GetPipelineInterval() int {
-	return c.Pipeline.Interval
+func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {
+	return pipeline.CallbackConfig{
+		MaxRetries:    c.Callback.MaxRetries,
+		RetryInterval: time.Duration(c.Callback.RetryInterval),
+		Url:           c.Callback.Url,
+	}
 }
 
-func (c *Config) GetPipelineCallbackUrl() string {
-	return c.Pipeline.CallbackUrl
+func (c *Config) GetPipelineInterval() int {
+	return c.Pipeline.Interval
 }
 
 func (c *Config) GetSmtpConfig() smtp.Config {

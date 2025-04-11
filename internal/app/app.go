@@ -24,7 +24,7 @@ type App struct {
 type configProvider interface {
 	GetAwsConfig() aws.Config
 	GetPipelineInterval() int
-	GetPipelineCallbackUrl() string
+	GetCallbackConfig() pipeline.CallbackConfig
 	GetSmtpConfig() smtp.Config
 }
 
@@ -34,9 +34,9 @@ func New(cp configProvider) (*App, error) {
 	outboxService := outbox.NewOutbox(db)
 
 	mainSenderPipe := pipeline.NewMainSenderPipeline(outboxService, client)
-	callbackUrl := cp.GetPipelineCallbackUrl()
-	sentCallbackPipe := pipeline.NewSentCallbackPipeline(outboxService, callbackUrl)
-	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(outboxService, callbackUrl)
+	callbackConfig := cp.GetCallbackConfig()
+	sentCallbackPipe := pipeline.NewSentCallbackPipeline(outboxService, callbackConfig)
+	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(outboxService, callbackConfig)
 
 	pipes := []pipelineProcessor{mainSenderPipe, sentCallbackPipe, failedCallbackPipe}
 	return &App{pipes: pipes, interval: cp.GetPipelineInterval()}, nil

@@ -4,9 +4,13 @@ aws:
   region: "${AWS_REGION}"
   base_endpoint: "${AWS_BASE_ENDPOINT}"
 
+callback:
+  max_retries: 3
+  retry_interval: 5
+  url: ${PIPELINE_CALLBACK_URL}
+
 pipeline:
   interval: ${PIPELINE_INTERVAL}
-  callback_url: ${PIPELINE_CALLBACK_URL}
 
 smtp:
   host: "${SMTP_HOST}"

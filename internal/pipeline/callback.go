@@ -9,16 +9,18 @@ import (
 	"mailculator-processor/internal/outbox"
 	"net/http"
 	"sync"
+	"time"
 )
 
-type HttpClient interface {
-	Do(req *http.Request) (*http.Response, error)
+type CallbackConfig struct {
+	MaxRetries    int
+	RetryInterval time.Duration
+	Url           string
 }
 
 type CallbackPipeline struct {
 	outbox             outboxService
-	callbackUrl        string
-	httpClient         HttpClient
+	cfg                CallbackConfig
 	logger             *slog.Logger
 	startStatus        string
 	processingStatus   string
@@ -51,14 +53,10 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				statusCode = "DISPATCH-ERROR"
 			}
 			payload := map[string]any{
-				"data": map[string]any{
-					"attributes": map[string]any{
-						"code":         statusCode,
-						"reachedAt":    e.UpdatedAt,
-						"messageUuids": []string{e.Id},
-						"reason":       e.Reason,
-					},
-				},
+				"code":          statusCode,
+				"reached_at":    e.UpdatedAt,
+				"message_uuids": []string{e.Id},
+				"reason":        e.Reason,
 			}
 
 			jsonBody, errJson := json.Marshal(payload)
@@ -68,14 +66,40 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 			}
 			bodyReader := bytes.NewReader(jsonBody)
 
-			req, errReq := http.NewRequest(http.MethodPost, p.callbackUrl, bodyReader)
+			req, errReq := http.NewRequest(http.MethodPost, p.cfg.Url, bodyReader)
 			if errReq != nil {
 				subLogger.Error(fmt.Sprintf("Error during request creation: %v", errReq))
 				return
 			}
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-MTRAX-SOURCE", "MULTIDIALOGO")
-			_, _ = p.httpClient.Do(req)
+
+			attempt := 0
+			resp := &http.Response{StatusCode: http.StatusConflict}
+			for attempt < p.cfg.MaxRetries && resp.StatusCode == http.StatusConflict {
+				resp, err = http.DefaultClient.Do(req)
+				if err != nil {
+					subLogger.Error(fmt.Sprintf("Error in the request: %v", err))
+					return
+				}
+				if resp.StatusCode == http.StatusConflict {
+					attempt++
+					retryMsg := ""
+					var retryInterval time.Duration = 0
+					if attempt < p.cfg.MaxRetries {
+						retryMsg = fmt.Sprintf(" Try to call again %s in %d seconds.", p.cfg.Url, p.cfg.RetryInterval)
+						retryInterval = p.cfg.RetryInterval * time.Second
+					}
+					subLogger.Warn(fmt.Sprintf(
+						"Response status code is %d.%s Attempt %d/%d",
+						resp.StatusCode, retryMsg, attempt, p.cfg.MaxRetries,
+					))
+					time.Sleep(retryInterval)
+				}
+			}
+			if attempt == p.cfg.MaxRetries {
+				subLogger.Error(fmt.Sprintf("Max retries exceeded for the url %s", p.cfg.Url))
+			}
 
 			if err = p.outbox.Update(ctx, e.Id, p.acknowledgedStatus, e.Reason); err != nil {
 				subLogger.Error(fmt.Sprintf("error while updating status after callback, error: %v", err))
@@ -86,11 +110,10 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 	wg.Wait()
 }
 
-func NewSentCallbackPipeline(ob outboxService, callbackUrl string) *CallbackPipeline {
+func NewSentCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
 	return &CallbackPipeline{
 		outbox:             ob,
-		callbackUrl:        callbackUrl,
-		httpClient:         &http.Client{},
+		cfg:                cfg,
 		logger:             slog.With("pipe", "sent-callback"),
 		startStatus:        outbox.StatusSent,
 		processingStatus:   outbox.StatusCallingSentCallback,
@@ -98,11 +121,10 @@ func NewSentCallbackPipeline(ob outboxService, callbackUrl string) *CallbackPipe
 	}
 }
 
-func NewFailedCallbackPipeline(ob outboxService, callbackUrl string) *CallbackPipeline {
+func NewFailedCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
 	return &CallbackPipeline{
 		outbox:             ob,
-		callbackUrl:        callbackUrl,
-		httpClient:         &http.Client{},
+		cfg:                cfg,
 		logger:             slog.With("pipe", "failed-callback"),
 		startStatus:        outbox.StatusFailed,
 		processingStatus:   outbox.StatusCallingFailedCallback,

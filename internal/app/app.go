@@ -2,11 +2,15 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+
+	"mailculator-processor/internal/healthcheck"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
@@ -17,12 +21,14 @@ type pipelineProcessor interface {
 }
 
 type App struct {
-	pipes    []pipelineProcessor
-	interval int
+	pipes             []pipelineProcessor
+	interval          int
+	healthCheckServer *healthcheck.Server
 }
 
 type configProvider interface {
 	GetAwsConfig() aws.Config
+	GetHealthCheckServerPort() int
 	GetPipelineInterval() int
 	GetCallbackConfig() pipeline.CallbackConfig
 	GetSmtpConfig() smtp.Config
@@ -39,7 +45,25 @@ func New(cp configProvider) (*App, error) {
 	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(outboxService, callbackConfig)
 
 	pipes := []pipelineProcessor{mainSenderPipe, sentCallbackPipe, failedCallbackPipe}
-	return &App{pipes: pipes, interval: cp.GetPipelineInterval()}, nil
+	healthCheckServer := healthcheck.NewServer(cp.GetHealthCheckServerPort())
+
+	return &App{
+		pipes:             pipes,
+		interval:          cp.GetPipelineInterval(),
+		healthCheckServer: healthCheckServer,
+	}, nil
+}
+
+func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelineProcessor, interval int) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			proc.Process(ctx)
+		}
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
 }
 
 func (a *App) Run(ctx context.Context) {
@@ -53,17 +77,11 @@ func (a *App) Run(ctx context.Context) {
 		}()
 	}
 
-	wg.Wait()
-}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		slog.Info(fmt.Sprintf("%v", a.healthCheckServer.ListenAndServe(ctx)))
+	}()
 
-func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelineProcessor, interval int) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			proc.Process(ctx)
-		}
-		time.Sleep(time.Duration(interval) * time.Second)
-	}
+	wg.Wait()
 }

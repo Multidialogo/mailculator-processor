@@ -4,14 +4,16 @@ package app
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
-	"testing"
-	"time"
 )
 
 type configProviderMock struct{}
@@ -74,6 +76,8 @@ func (t *processorMock) Process(ctx context.Context) {
 }
 
 func TestRunFunction(t *testing.T) {
+	// TODO add healthcheck tests
+
 	proc1 := newProcessorMock(200)
 	proc2 := newProcessorMock(200)
 	app := &App{pipes: []pipelineProcessor{proc1, proc2}}

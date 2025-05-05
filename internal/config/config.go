@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
-	"mailculator-processor/internal/pipeline"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/go-playground/validator/v10"
+
+	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
 
@@ -28,6 +29,14 @@ type CallbacksConfig struct {
 	Url           string `yaml:"url" validate:"required"`
 }
 
+type HealthCheckServerConfig struct {
+	Port int `yaml:"port" validate:"required"`
+}
+
+type HealthCheckConfig struct {
+	Server HealthCheckServerConfig `yaml:"server" validate:"required"`
+}
+
 type PipelineConfig struct {
 	Interval int `yaml:"interval" validate:"required"`
 }
@@ -42,10 +51,11 @@ type SmtpConfig struct {
 }
 
 type Config struct {
-	Aws      AwsConfig       `yaml:"aws,flow" validate:"required"`
-	Callback CallbacksConfig `yaml:"callback" validate:"required"`
-	Pipeline PipelineConfig  `yaml:"pipeline" validate:"required"`
-	Smtp     SmtpConfig      `yaml:"smtp,flow" validate:"required"`
+	Aws         AwsConfig         `yaml:"aws,flow" validate:"required"`
+	Callback    CallbacksConfig   `yaml:"callback" validate:"required"`
+	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
+	Pipeline    PipelineConfig    `yaml:"pipeline" validate:"required"`
+	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
 }
 
 func NewFromYaml(filePath string) (*Config, error) {
@@ -112,6 +122,10 @@ func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {
 		RetryInterval: time.Duration(c.Callback.RetryInterval),
 		Url:           c.Callback.Url,
 	}
+}
+
+func (c *Config) GetHealthCheckServerPort() int {
+	return c.HealthCheck.Server.Port
 }
 
 func (c *Config) GetPipelineInterval() int {

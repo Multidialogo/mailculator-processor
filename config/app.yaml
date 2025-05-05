@@ -9,6 +9,10 @@ callback:
   retry_interval: 5
   url: ${PIPELINE_CALLBACK_URL}
 
+health-check:
+  server:
+    port: 8080
+
 pipeline:
   interval: ${PIPELINE_INTERVAL}
 

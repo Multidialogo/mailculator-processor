@@ -13,6 +13,5 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Run tests
         run: chmod +x ./run-tests-ci.sh && ./run-tests-ci.sh

@@ -1,0 +1,83 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - develop
+  merge_group:
+    branches:
+      - develop
+
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
+
+env:
+  SERVICE_NAME: multicarrier-email-daemon
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select Environment
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+            echo "ENVIRONMENT=stage" >> $GITHUB_ENV
+          fi
+
+      # Step 1: Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Step 2: Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Step 3: Login to ECR registry
+      - name: Login ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Step 4: Build & push image
+      - name: Image build
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_NAME: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
+        run: |
+          docker build -t "$IMAGE_NAME:latest" -f Dockerfile .
+          docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:latest
+          docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA
+          docker push $ECR_REGISTRY/$IMAGE_NAME --all-tags
+          echo "image=$ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA" >> $GITHUB_OUTPUT
+
+      # Step 5: Retrieve task definition json
+      - name: Retrieve Task Definition json
+        env:
+          FAMILY: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
+        run: |
+          aws ecs describe-task-definition --task-definition $FAMILY --query taskDefinition > task-definition.json
+
+      # Step 6: Update task definition image
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.SERVICE_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      # Step 6: Deploy
+      - name: Deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-definition.outputs.task-definition }}
+          service: ${{ env.SERVICE_NAME }}
+          cluster: ${{ env.ENVIRONMENT }}
+          wait-for-service-stability: true
+

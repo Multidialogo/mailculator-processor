@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"log"
 	"os/signal"
 	"syscall"
@@ -10,7 +11,8 @@ import (
 	"mailculator-processor/internal/config"
 )
 
-const configFilePath = "../../config/app.yaml"
+//go:embed config/config.yaml
+var configYamlContent []byte
 
 var runFn = run
 
@@ -21,7 +23,7 @@ func main() {
 }
 
 func run(ctx context.Context) {
-	cfg, err := config.NewFromYaml(configFilePath)
+	cfg, err := config.NewFromYamlContent(configYamlContent)
 	if err != nil {
 		log.Panic(err)
 	}

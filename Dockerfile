@@ -4,7 +4,7 @@ WORKDIR /build/app
 
 COPY . .
 
-RUN go mod tidy && go build -o bin/main .
+RUN go mod tidy && go build -o bin/main ./cmd/main
 
 
 FROM alpine:3.21 AS deploy

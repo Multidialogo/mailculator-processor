@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"mailculator-processor/internal/healthcheck"
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
@@ -39,6 +40,10 @@ func (cp *configProviderMock) GetCallbackConfig() pipeline.CallbackConfig {
 		RetryInterval: 2,
 		MaxRetries:    3,
 	}
+}
+
+func (cp *configProviderMock) GetHealthCheckServerPort() int {
+	return 8080
 }
 
 func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
@@ -70,7 +75,7 @@ func newProcessorMock(sleepMilliseconds int) *processorMock {
 	return &processorMock{sleepMilliseconds: sleepMilliseconds, calls: 0}
 }
 
-func (t *processorMock) Process(ctx context.Context) {
+func (t *processorMock) Process(_ context.Context) {
 	time.Sleep(time.Duration(t.sleepMilliseconds) * time.Millisecond)
 	t.calls++
 }
@@ -80,7 +85,8 @@ func TestRunFunction(t *testing.T) {
 
 	proc1 := newProcessorMock(200)
 	proc2 := newProcessorMock(200)
-	app := &App{pipes: []pipelineProcessor{proc1, proc2}}
+	healthCheckServer := healthcheck.NewServer(8080)
+	app := &App{pipes: []pipelineProcessor{proc1, proc2}, healthCheckServer: healthCheckServer}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()

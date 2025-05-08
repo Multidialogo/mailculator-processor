@@ -1,7 +1,4 @@
 aws:
-  key: "${AWS_ACCESS_KEY_ID}"
-  secret: "${AWS_SECRET_ACCESS_KEY}"
-  region: "${AWS_REGION}"
   base_endpoint: "${AWS_BASE_ENDPOINT}"
 
 callback:

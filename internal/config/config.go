@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -9,7 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/go-playground/validator/v10"
 
 	"mailculator-processor/internal/pipeline"
@@ -18,9 +19,7 @@ import (
 
 type AwsConfig struct {
 	BaseEndpoint string `yaml:"base_endpoint"`
-	Key          string `yaml:"key" validate:"required"`
-	Secret       string `yaml:"secret" validate:"required"`
-	Region       string `yaml:"region" validate:"required"`
+	sdkConfig    aws.Config
 }
 
 type CallbacksConfig struct {
@@ -51,7 +50,7 @@ type SmtpConfig struct {
 }
 
 type Config struct {
-	Aws         AwsConfig         `yaml:"aws,flow" validate:"required"`
+	Aws         AwsConfig         `yaml:"aws,flow"`
 	Callback    CallbacksConfig   `yaml:"callback" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
 	Pipeline    PipelineConfig    `yaml:"pipeline" validate:"required"`
@@ -59,16 +58,15 @@ type Config struct {
 }
 
 func NewFromYamlContent(yamlContent []byte) (*Config, error) {
-	config := &Config{}
-
+	cfg := &Config{}
 	yamlString := os.ExpandEnv(string(yamlContent))
 	reader := strings.NewReader(yamlString)
 
-	if err := config.load(reader); err != nil {
+	if err := cfg.load(reader); err != nil {
 		return nil, err
 	}
 
-	return config, nil
+	return cfg, nil
 }
 
 func (c *Config) load(r io.Reader) error {
@@ -76,7 +74,6 @@ func (c *Config) load(r io.Reader) error {
 	decoder.KnownFields(true)
 
 	decodeErr := decoder.Decode(c)
-
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	err := validate.Struct(c)
 
@@ -86,28 +83,25 @@ func (c *Config) load(r io.Reader) error {
 	if decodeErr != nil {
 		return decodeErr
 	}
-	return err
-}
+	if err != nil {
+		return err
+	}
 
-func (c *Config) getAwsCredentialsProvider() credentials.StaticCredentialsProvider {
-	return credentials.NewStaticCredentialsProvider(
-		c.Aws.Key,
-		c.Aws.Secret,
-		"",
-	)
-}
-
-func (c *Config) GetAwsConfig() aws.Config {
-	cfg := aws.Config{
-		Region:      c.Aws.Region,
-		Credentials: c.getAwsCredentialsProvider(),
+	awsConfig, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return err
 	}
 
 	if c.Aws.BaseEndpoint != "" {
-		cfg.BaseEndpoint = aws.String(c.Aws.BaseEndpoint)
+		awsConfig.BaseEndpoint = aws.String(c.Aws.BaseEndpoint)
 	}
 
-	return cfg
+	c.Aws.sdkConfig = awsConfig
+	return nil
+}
+
+func (c *Config) GetAwsConfig() aws.Config {
+	return c.Aws.sdkConfig
 }
 
 func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 )
 
 type Server struct {
@@ -35,11 +36,26 @@ func (hs *Server) ListenAndServe(ctx context.Context) error {
 		return ctx
 	}
 
-	httpServer := &http.Server{
+	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", hs.port),
 		BaseContext: baseContextFunc,
 		Handler:     mux,
 	}
 
-	return httpServer.ListenAndServe()
+	go func() {
+		_ = srv.ListenAndServe()
+	}()
+
+	<-ctx.Done()
+
+	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	if err := srv.Shutdown(ctxShutDown); err != nil {
+		return fmt.Errorf("server shutdown failed:%v", err)
+	}
+
+	return nil
 }

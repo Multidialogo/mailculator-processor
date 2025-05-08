@@ -58,19 +58,13 @@ type Config struct {
 	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
 }
 
-func NewFromYaml(filePath string) (*Config, error) {
+func NewFromYamlContent(yamlContent []byte) (*Config, error) {
 	config := &Config{}
 
-	yamlData, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	yamlString := os.ExpandEnv(string(yamlData))
-
+	yamlString := os.ExpandEnv(string(yamlContent))
 	reader := strings.NewReader(yamlString)
 
-	if err = config.load(reader); err != nil {
+	if err := config.load(reader); err != nil {
 		return nil, err
 	}
 

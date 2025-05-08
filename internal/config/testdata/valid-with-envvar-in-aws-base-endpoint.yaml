@@ -1,8 +1,5 @@
 aws:
-  key: dummy-key
-  secret: "${TEST_ENV_VAR}"
-  region: "dummy-region-with-quotation-marks"
-  base_endpoint: dummy-base-endpoint
+  base_endpoint: "${TEST_ENV_VAR}"
 
 callback:
   max_retries: 3

@@ -5,18 +5,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"mailculator-processor/internal/outbox"
-	"mailculator-processor/internal/testutils/facades"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"mailculator-processor/internal/outbox"
+	"mailculator-processor/internal/testutils/facades"
 )
 
 func TestMainComplete(t *testing.T) {
@@ -33,7 +34,7 @@ func TestMainComplete(t *testing.T) {
 	}
 
 	srv := &http.Server{
-		Addr: ":8080",
+		Addr: ":8081",
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				t.Errorf("Method error: expected POST received %s", r.Method)

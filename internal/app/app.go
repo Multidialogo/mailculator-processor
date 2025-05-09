@@ -31,13 +31,14 @@ type configProvider interface {
 	GetHealthCheckServerPort() int
 	GetPipelineInterval() int
 	GetCallbackConfig() pipeline.CallbackConfig
+	GetOutboxTableName() string
 	GetSmtpConfig() smtp.Config
 }
 
 func New(cp configProvider) (*App, error) {
 	db := dynamodb.NewFromConfig(cp.GetAwsConfig())
 	client := smtp.New(cp.GetSmtpConfig())
-	outboxService := outbox.NewOutbox(db)
+	outboxService := outbox.NewOutbox(db, cp.GetOutboxTableName())
 
 	mainSenderPipe := pipeline.NewMainSenderPipeline(outboxService, client)
 	callbackConfig := cp.GetCallbackConfig()

@@ -20,8 +20,10 @@ import (
 	"mailculator-processor/internal/testutils/facades"
 )
 
+const outboxTableName = "Outbox"
+
 func TestMainComplete(t *testing.T) {
-	oFacade, err := facades.NewOutboxFacade(outbox.TableName, outbox.StatusMeta)
+	oFacade, err := facades.NewOutboxFacade(outboxTableName, outbox.StatusMeta)
 	require.NoError(t, err)
 
 	fixtures := make([]string, 0)
@@ -52,7 +54,7 @@ func TestMainComplete(t *testing.T) {
 	awsConfig := facades.NewAwsConfigFromEnv()
 	db := dynamodb.NewFromConfig(awsConfig)
 	for _, value := range fixtures {
-		query := fmt.Sprintf("SELECT Attributes.Latest FROM \"%v\" WHERE Id=? AND Status=?", outbox.TableName)
+		query := fmt.Sprintf("SELECT Attributes.Latest FROM \"%v\" WHERE Id=? AND Status=?", outboxTableName)
 		params, _ := attributevalue.MarshalList([]any{value, outbox.StatusMeta})
 		stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
 		res, midErr := db.ExecuteStatement(context.TODO(), stmt)

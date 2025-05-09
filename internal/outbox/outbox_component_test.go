@@ -12,6 +12,8 @@ import (
 	"mailculator-processor/internal/testutils/facades"
 )
 
+const outboxTableName = "Outbox"
+
 var fixtures []string
 
 func deleteFixtures(t *testing.T, of *facades.OutboxFacade) {
@@ -37,8 +39,8 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 
 	awsConfig := facades.NewAwsConfigFromEnv()
 	db := dynamodb.NewFromConfig(awsConfig)
-	sut := NewOutbox(db)
-	of, err := facades.NewOutboxFacade(TableName, StatusMeta)
+	sut := NewOutbox(db, outboxTableName)
+	of, err := facades.NewOutboxFacade(outboxTableName, StatusMeta)
 
 	fixtures = make([]string, 0)
 	defer deleteFixtures(t, of)

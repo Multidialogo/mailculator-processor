@@ -1,6 +1,3 @@
-aws:
-  base_endpoint: "${TEST_ENV_VAR}"
-
 callback:
   max_retries: 3
   retry_interval: 5
@@ -9,6 +6,9 @@ callback:
 health-check:
   server:
     port: 8080
+
+outbox:
+  table-name: "${TEST_ENV_VAR}"
 
 pipeline:
   interval: 3

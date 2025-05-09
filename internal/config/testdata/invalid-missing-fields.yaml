@@ -7,6 +7,9 @@ health-check:
   server:
     port: 8080
 
+outbox:
+  table-name: "Outbox"
+
 pipeline:
   interval: 3
 

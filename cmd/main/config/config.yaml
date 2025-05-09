@@ -10,6 +10,9 @@ health-check:
   server:
     port: 8080
 
+outbox:
+  table-name: "${EMAIL_OUTBOX_TABLE}"
+
 pipeline:
   interval: ${PIPELINE_INTERVAL}
 

@@ -22,6 +22,7 @@ services:
       SMTP_ALLOW_INSECURE_TLS: 'true'
       PIPELINE_INTERVAL: '1'
       PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
+      EMAIL_OUTBOX_TABLE: 'Outbox'
     command: >
       sh -c "go mod tidy &&
              ./scripts/coverage.sh unit &&

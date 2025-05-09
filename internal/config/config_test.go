@@ -57,11 +57,11 @@ func TestExpandEnvVars(t *testing.T) {
 	randomString := fmt.Sprintf("ran%d", rand.Int())
 	t.Setenv("TEST_ENV_VAR", randomString)
 
-	yamlContent, err := getYamlContent("testdata/valid-with-envvar-in-aws-base-endpoint.yaml")
+	yamlContent, err := getYamlContent("testdata/valid-with-envvar-in-outbox-table-name.yaml")
 	if err != nil {
 		t.Error(err)
 	}
 
 	cfg, _ := NewFromYamlContent(yamlContent)
-	assert.Equal(t, randomString, cfg.Aws.BaseEndpoint)
+	assert.Equal(t, randomString, cfg.Outbox.TableName)
 }

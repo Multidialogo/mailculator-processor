@@ -36,6 +36,10 @@ type HealthCheckConfig struct {
 	Server HealthCheckServerConfig `yaml:"server" validate:"required"`
 }
 
+type OutboxConfig struct {
+	TableName string `yaml:"table-name" validate:"required"`
+}
+
 type PipelineConfig struct {
 	Interval int `yaml:"interval" validate:"required"`
 }
@@ -51,9 +55,10 @@ type SmtpConfig struct {
 
 type Config struct {
 	Aws         AwsConfig         `yaml:"aws,flow"`
-	Callback    CallbacksConfig   `yaml:"callback" validate:"required"`
+	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
-	Pipeline    PipelineConfig    `yaml:"pipeline" validate:"required"`
+	Outbox      OutboxConfig      `yaml:"outbox,flow" validate:"required"`
+	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
 	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
 }
 
@@ -114,6 +119,10 @@ func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {
 
 func (c *Config) GetHealthCheckServerPort() int {
 	return c.HealthCheck.Server.Port
+}
+
+func (c *Config) GetOutboxTableName() string {
+	return c.Outbox.TableName
 }
 
 func (c *Config) GetPipelineInterval() int {

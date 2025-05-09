@@ -84,7 +84,7 @@ func TestQueryLimit(t *testing.T) {
 		},
 	}
 
-	sut := NewOutbox(nil)
+	sut := NewOutbox(nil, "Outbox")
 	sut.db = dbMock
 
 	actual, err := sut.Query(context.TODO(), "ANY", 1)

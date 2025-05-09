@@ -23,7 +23,6 @@ const (
 )
 
 const (
-	TableName   = "Outbox"
 	statusIndex = "StatusIndex"
 	StatusMeta  = "_META"
 )
@@ -42,15 +41,19 @@ type dynamodbInterface interface {
 }
 
 type Outbox struct {
-	db dynamodbInterface
+	db        dynamodbInterface
+	tableName string
 }
 
-func NewOutbox(db *dynamodb.Client) *Outbox {
-	return &Outbox{db: db}
+func NewOutbox(db *dynamodb.Client, tableName string) *Outbox {
+	return &Outbox{
+		db:        db,
+		tableName: tableName,
+	}
 }
 
 func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, error) {
-	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", TableName, statusIndex)
+	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", o.tableName, statusIndex)
 	params, _ := attributevalue.MarshalList([]any{StatusMeta, status})
 
 	stmt := &dynamodb.ExecuteStatementInput{
@@ -71,7 +74,7 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 }
 
 func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {
-	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", TableName)
+	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
 	metaParams, _ := attributevalue.MarshalList([]any{
 		status,
 		time.Now().Format(time.RFC3339),
@@ -80,7 +83,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 		StatusMeta,
 	})
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", TableName)
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
 	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}})
 
 	ti := &dynamodb.ExecuteTransactionInput{

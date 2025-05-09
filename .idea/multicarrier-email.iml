@@ -6,6 +6,7 @@
         <array>
           <option value="unit" />
           <option value="integration" />
+          <option value="repository" />
         </array>
       </option>
     </buildTags>

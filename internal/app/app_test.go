@@ -46,6 +46,10 @@ func (cp *configProviderMock) GetHealthCheckServerPort() int {
 	return 8080
 }
 
+func (cp *configProviderMock) GetOutboxTableName() string {
+	return "Outbox"
+}
+
 func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
 	return smtp.Config{
 		Host:             "dummy-host",

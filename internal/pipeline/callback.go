@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"mailculator-processor/internal/outbox"
 	"net/http"
 	"sync"
 	"time"
+
+	"mailculator-processor/internal/outbox"
 )
 
 type CallbackConfig struct {
@@ -40,6 +42,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
 			p.logger.Info(fmt.Sprintf("processing email %v", e.Id))
 			subLogger := p.logger.With("email", e.Id)
 
@@ -71,34 +74,52 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				subLogger.Error(fmt.Sprintf("Error during request creation: %v", errReq))
 				return
 			}
+
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-MTRAX-SOURCE", "MULTIDIALOGO")
 
-			attempt := 0
 			resp := &http.Response{StatusCode: http.StatusConflict}
+
+			attempt := 0
 			for attempt < p.cfg.MaxRetries && resp.StatusCode == http.StatusConflict {
 				resp, err = http.DefaultClient.Do(req)
 				if err != nil {
 					subLogger.Error(fmt.Sprintf("Error in the request: %v", err))
 					return
 				}
+
 				if resp.StatusCode == http.StatusConflict {
 					attempt++
 					retryMsg := ""
 					var retryInterval time.Duration = 0
+
 					if attempt < p.cfg.MaxRetries {
 						retryMsg = fmt.Sprintf(" Try to call again %s in %d seconds.", p.cfg.Url, p.cfg.RetryInterval)
 						retryInterval = p.cfg.RetryInterval * time.Second
 					}
+
 					subLogger.Warn(fmt.Sprintf(
 						"Response status code is %d.%s Attempt %d/%d",
 						resp.StatusCode, retryMsg, attempt, p.cfg.MaxRetries,
 					))
+
 					time.Sleep(retryInterval)
 				}
 			}
+
 			if attempt == p.cfg.MaxRetries {
 				subLogger.Error(fmt.Sprintf("Max retries exceeded for the url %s", p.cfg.Url))
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				bodyBytes, err := io.ReadAll(resp.Body)
+				if err != nil {
+					subLogger.Error(fmt.Sprintf("error reading callback response body %v", err))
+				} else {
+					subLogger.Error(fmt.Sprintf("error on callback, status: %v, response: %v", resp.StatusCode, string(bodyBytes)))
+				}
+			} else {
+				subLogger.Info("callback successfully processed")
 			}
 
 			if err = p.outbox.Update(ctx, e.Id, p.acknowledgedStatus, e.Reason); err != nil {

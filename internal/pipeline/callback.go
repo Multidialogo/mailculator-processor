@@ -56,10 +56,10 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				statusCode = "DISPATCH-ERROR"
 			}
 			payload := map[string]any{
-				"code":          statusCode,
-				"reached_at":    e.UpdatedAt,
-				"message_uuids": []string{e.Id},
-				"reason":        e.Reason,
+				"code":        statusCode,
+				"reached_at":  e.UpdatedAt,
+				"message_ids": []string{e.Id},
+				"reason":      e.Reason,
 			}
 
 			jsonBody, errJson := json.Marshal(payload)

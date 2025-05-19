@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
-	"github.com/emersion/go-smtp"
 	"net/mail"
 	"os"
 	"strings"
+
+	"github.com/emersion/go-sasl"
+	"github.com/emersion/go-smtp"
 )
 
 type Config struct {
@@ -41,6 +43,11 @@ func (c *Client) Send(emlFilePath string) error {
 
 	defer func() { _ = client.Quit() }()
 	defer func() { _ = client.Close() }()
+
+	auth := sasl.NewPlainClient("", c.cfg.User, c.cfg.Password)
+	if err := client.Auth(auth); err != nil {
+		return err
+	}
 
 	reader, err := os.Open(emlFilePath)
 	if err != nil {

@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - develop
+      - main
   merge_group:
     branches:
       - develop
+      - main
 
 permissions:
   id-token: write # This is required for requesting the JWT

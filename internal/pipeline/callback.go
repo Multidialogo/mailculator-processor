@@ -51,7 +51,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				return
 			}
 
-			statusCode := "TRAVELING"
+			statusCode := "RECEIVED-NOTIFIED"
 			if p.startStatus == outbox.StatusFailed {
 				statusCode = "DISPATCH-ERROR"
 			}

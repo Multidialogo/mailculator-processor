@@ -56,21 +56,38 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", o.tableName, statusIndex)
 	params, _ := attributevalue.MarshalList([]any{StatusMeta, status})
 
-	stmt := &dynamodb.ExecuteStatementInput{
-		Parameters: params,
-		Statement:  aws.String(query),
+	var items []map[string]types.AttributeValue
+	var nextToken *string
+	done := false
+
+	for !done {
+		stmt := &dynamodb.ExecuteStatementInput{
+			Parameters: params,
+			Statement:  aws.String(query),
+			NextToken:  nextToken,
+		}
+
+		res, err := o.db.ExecuteStatement(ctx, stmt)
+		if err != nil {
+			return []Email{}, err
+		}
+
+		items = append(items, res.Items...)
+
+		if len(items) > limit {
+			items = append([]map[string]types.AttributeValue{}, items[:limit]...)
+			done = true
+			break
+		}
+
+		if res.NextToken != nil {
+			nextToken = res.NextToken
+		} else {
+			done = true
+		}
 	}
 
-	res, err := o.db.ExecuteStatement(ctx, stmt)
-	if err != nil {
-		return []Email{}, err
-	}
-
-	if len(res.Items) > limit {
-		res.Items = append([]map[string]types.AttributeValue{}, res.Items[:limit]...)
-	}
-
-	return new(emailMarshaller).UnmarshalList(res.Items)
+	return new(emailMarshaller).UnmarshalList(items)
 }
 
 func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {

@@ -269,6 +269,6 @@ class TaskDefinitionStack(Stack):
             parameter_name=tmp_task_definition_arn_parameter_name
         )
 
-        Tags.of(task_definition).add('ecs_container_name', service_name)
+        Tags.of(task_definition).add('ecs_container_name', 'container')
         Tags.of(task_definition).add('task_family', task_definition_family)
         Tags.of(task_definition).add('image_tag', image_tag)

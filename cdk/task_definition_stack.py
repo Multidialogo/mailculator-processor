@@ -122,7 +122,7 @@ class TaskDefinitionStack(Stack):
         log_group = logs.LogGroup(
             scope=self,
             id=f'{service_name}-log-group',
-            log_group_name=f'{selected_environment}/{MULTICARRIER_EMAIL_ID}/{service_name}',
+            log_group_name=f'/{selected_environment}/{MULTICARRIER_EMAIL_ID}/{service_name}',
             removal_policy=log_group_retainment,
             retention=logs.RetentionDays.ONE_MONTH
         )

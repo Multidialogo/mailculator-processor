@@ -109,20 +109,20 @@ jobs:
           echo "task-definition-arn=$TMP_TASK_DEFINITION_ARN" >> $GITHUB_OUTPUT
 
       # Step 7: Deploy new task definition and wait for service to be stable
-      - name: Deploy task definition
-        id: task-definition-deploy
-        run: |
-          aws ecs update-service \
-          --cluster ${{ env.ENVIRONMENT }} \
-          --service ${{ env.SERVICE_NAME }} \
-          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }}
-          aws ecs wait services-stable \
-          --cluster ${{ env.ENVIRONMENT }} \
-          --services ${{ env.SERVICE_NAME }}
+#      - name: Deploy task definition
+#        id: task-definition-deploy
+#        run: |
+#          aws ecs update-service \
+#          --cluster ${{ env.ENVIRONMENT }} \
+#          --service ${{ env.SERVICE_NAME }} \
+#          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }}
+#          aws ecs wait services-stable \
+#          --cluster ${{ env.ENVIRONMENT }} \
+#          --services ${{ env.SERVICE_NAME }}
 
       # Step 8a: Update task definition ssm parameter if the deployment succeeds
       - name: Update the task definition ssm parameter
-        if: ${{ steps.task-definition-deploy.outcome == 'success' }}
+#        if: ${{ steps.task-definition-deploy.outcome == 'success' }}
         continue-on-error: false
         run: |
           aws ssm put-parameter \

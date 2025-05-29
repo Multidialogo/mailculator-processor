@@ -139,20 +139,8 @@ class TaskDefinitionStack(Stack):
             )
         )
 
-        task_definition.add_volume(
-            name=MC_VOLUME_NAME,
-            efs_volume_configuration=ecs.EfsVolumeConfiguration(
-                file_system_id=mc_email_efs_id,
-                transit_encryption='ENABLED',
-                authorization_config=ecs.AuthorizationConfig(
-                    access_point_id=mc_eml_access_point_id,
-                    iam='ENABLED'
-                )
-            )
-        )
-
         container = task_definition.add_container(
-            id=service_name,
+            id='container',
             image=ecs.ContainerImage.from_ecr_repository(
                 repository=repository,
                 tag=image_tag

@@ -236,7 +236,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='PIPELINE_CALLBACK_URL',
-            value=f'{callback_endpoint}/status-updates'
+            value=f'https://{callback_endpoint}/status-updates'
         )
 
         container.add_environment(

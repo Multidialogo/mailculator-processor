@@ -16,6 +16,11 @@ permissions:
 
 env:
   SERVICE_NAME: multicarrier-email-daemon
+  ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+  MC_EMAIL_EFS_FOLDER_NAME: ${{ vars.MC_EMAIL_EFS_FOLDER_NAME }}
+  SERVICE_CONTAINER_PORT: ${{ vars.SERVICE_CONTAINER_PORT }}
+  SERVICE_HOST_PORT: ${{ vars.SERVICE_HOST_PORT }}
+  SMTP_SENDER: ${{ secrets.SMTP_SENDER }}
 
 jobs:
   build:
@@ -25,8 +30,34 @@ jobs:
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+            echo "SERVICE_CPU=${{ vars.PROD_SERVICE_CPU }}" >> $GITHUB_ENV
+            echo "SERVICE_MEMORY=${{ vars.PROD_SERVICE_MEMORY }}" >> $GITHUB_ENV
+            echo "OUTBOX_TABLE_NAME_PARAMETER_NAME=${{ vars.PROD_OUTBOX_TABLE_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME=${{ vars.PROD_MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.PROD_MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ID_PARAMETER_NAME=${{ vars.PROD_MC_EML_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "REPOSITORY_NAME_PARAMETER_NAME=${{ vars.PROD_REPOSITORY_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.PROD_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.PROD_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.PROD_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.PROD_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
+            echo "SMTP_USER=${{ secrets.PROD_SMTP_USER }}" >> $GITHUB_ENV
+            echo "SMTP_PASSWORD=${{ secrets.PROD_SMTP_PASSWORD }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
             echo "ENVIRONMENT=stage" >> $GITHUB_ENV
+            echo "SERVICE_CPU=${{ vars.STAGE_SERVICE_CPU }}" >> $GITHUB_ENV
+            echo "SERVICE_MEMORY=${{ vars.STAGE_SERVICE_MEMORY }}" >> $GITHUB_ENV
+            echo "OUTBOX_TABLE_NAME_PARAMETER_NAME=${{ vars.STAGE_OUTBOX_TABLE_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME=${{ vars.STAGE_MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.STAGE_MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MC_EML_EFS_ID_PARAMETER_NAME=${{ vars.STAGE_MC_EML_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "REPOSITORY_NAME_PARAMETER_NAME=${{ vars.STAGE_REPOSITORY_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.STAGE_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.STAGE_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.STAGE_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.STAGE_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
+            echo "SMTP_USER=${{ secrets.STAGE_SMTP_USER }}" >> $GITHUB_ENV
+            echo "SMTP_PASSWORD=${{ secrets.STAGE_SMTP_PASSWORD }}" >> $GITHUB_ENV
           fi
 
       # Step 1: Checkout the repository
@@ -57,29 +88,52 @@ jobs:
           docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA
           docker push $ECR_REGISTRY/$IMAGE_NAME --all-tags
           echo "image=$ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA" >> $GITHUB_OUTPUT
+          echo "image-tag=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
-      # Step 5: Retrieve task definition json
-      - name: Retrieve Task Definition json
-        env:
-          FAMILY: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
+      # Step 5: Deploy updated task definition stack
+      - name: Deploy CDK Stack
+        continue-on-error: false
+        uses: arnaskro/aws-cdk-v2-github-actions@v2.3.0
+        with:
+          cdk_subcommand: 'deploy'
+          cdk_args: '-c environment=${{ env.ENVIRONMENT }} -c image_tag=${{ steps.build-image.outputs.image-tag }} --require-approval never'
+          actions_comment: false
+          working_dir: cdk
+
+      # Step 6: Retrieve updated temporary task definition arn
+      - name: Retrieve image updated task definition
+        continue-on-error: false
+        id: get-tmp-task-definition
         run: |
-          aws ecs describe-task-definition --task-definition $FAMILY --query taskDefinition > task-definition.json
+          TMP_TASK_DEFINITION_ARN=$(aws ssm get-parameter --name ${{ env.TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }} --query Parameter.Value --output text)
+          echo "task-definition-arn=$TMP_TASK_DEFINITION_ARN" >> $GITHUB_OUTPUT
 
-      # Step 6: Update task definition image
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-definition
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: container
-          image: ${{ steps.build-image.outputs.image }}
+      # Step 7: Deploy new task definition and wait for service to be stable
+      - name: Deploy task definition
+        id: task-definition-deploy
+        run: |
+          aws ecs update-service \
+          --cluster ${{ env.ENVIRONMENT }} \
+          --service ${{ env.SERVICE_NAME }} \
+          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }}
+          aws ecs wait services-stable \
+          --cluster ${{ env.ENVIRONMENT }} \
+          --services ${{ env.SERVICE_NAME }}
 
-      # Step 6: Deploy
-      - name: Deploy
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-definition.outputs.task-definition }}
-          service: ${{ env.SERVICE_NAME }}
-          cluster: ${{ env.ENVIRONMENT }}
-          wait-for-service-stability: true
+      # Step 8a: Update task definition ssm parameter if the deployment succeeds
+      - name: Update the task definition ssm parameter
+        if: ${{ steps.task-definition-deploy.outcome == 'success' }}
+        continue-on-error: false
+        run: |
+          aws ssm put-parameter \
+          --name ${{ env.TASK_DEFINITION_ARN_PARAMETER_NAME }} \
+          --value ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }} \
+          --type String \
+          --overwrite
 
+      # Step 8b: Deregister the task definition if the deployment fails
+      - name: Delete task definition if deploy fails
+        if: ${{ steps.task-definition-deploy.outcome == 'failure' }}
+        run: |
+          aws ecs deregister-task-definition \
+          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }}

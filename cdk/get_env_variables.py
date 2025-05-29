@@ -33,5 +33,4 @@ class GetEnvVariables:
         }
 
         for i in ENVIRONMENT_VARIABLES:
-            i_env = f'{selected_environment.upper()}_{i}'
-            self.env_dict[i] = os.environ[i_env]
+            self.env_dict[i] = os.environ[i]

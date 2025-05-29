@@ -4,3 +4,11 @@
 deployments/build
 
 !**/.gitkeep
+
+.venv
+
+*.iml
+
+cdk/cdk.out
+
+.idea

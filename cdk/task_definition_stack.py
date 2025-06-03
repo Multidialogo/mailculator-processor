@@ -5,9 +5,10 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_ssm as ssm,
     aws_ecr as ecr,
+    aws_secretsmanager as secretsmanager,
     Stack,
     RemovalPolicy,
-    Tags
+    Tags, Duration
 )
 from constructs import Construct
 
@@ -50,6 +51,7 @@ class TaskDefinitionStack(Stack):
         smtp_user = env_parameters['SMTP_USER']
         smtp_password = env_parameters['SMTP_PASSWORD']
         smtp_sender = env_parameters['SMTP_SENDER']
+        dd_api_key_secret_name = env_parameters['DD_API_KEY_SECRET_NAME']
 
         task_definition_family = f'{selected_environment}-{service_name}'
 
@@ -117,6 +119,17 @@ class TaskDefinitionStack(Stack):
             )
         )
 
+        task_definition.add_to_execution_role_policy(
+            statement=iam.PolicyStatement(
+                actions=[
+                    'secretsmanager:GetSecretValue'
+                ],
+                resources=[
+                    f'arn:aws:secretsmanager:{self.region}:{self.account}:secret:{dd_api_key_secret_name}-*'
+                ]
+            )
+        )
+
         log_group_retainment = RemovalPolicy.RETAIN if selected_environment == 'prod' else RemovalPolicy.DESTROY
 
         log_group = logs.LogGroup(
@@ -176,6 +189,59 @@ class TaskDefinitionStack(Stack):
                 source_volume=MC_VOLUME_NAME,
                 read_only=True
             )
+        )
+
+        datadog_container_log_group = logs.LogGroup(
+            scope=self,
+            id=f'{service_name}-datadog-container-log-group',
+            log_group_name=f'/{selected_environment}/{MULTICARRIER_EMAIL_ID}/{service_name}-datadog-container',
+            removal_policy=log_group_retainment,
+            retention=logs.RetentionDays.ONE_MONTH
+        )
+
+        dd_api_key_secret = secretsmanager.Secret.from_secret_name_v2(
+            scope=self,
+            id='dd-api-key-secret',
+            secret_name=dd_api_key_secret_name,
+        )
+
+        datadog_container = task_definition.add_container(
+            id='datadog-container',
+            image=ecs.ContainerImage.from_registry(
+                'public.ecr.aws/datadog/agent:latest'
+            ),
+            logging=ecs.LogDriver.aws_logs(
+                stream_prefix=f'/{selected_environment}/{service_name}/datadog-agent',
+                log_group=datadog_container_log_group
+            ),
+            secrets={
+                'DD_API_KEY': ecs.Secret.from_secrets_manager(secret=dd_api_key_secret, field='key')
+            },
+            cpu=256,
+            memory_limit_mib=512,
+            essential=True,
+            health_check=ecs.HealthCheck(
+                command=['CMD-SHELL', 'agent health'],
+                retries=3,
+                timeout=Duration.seconds(5),
+                interval=Duration.seconds(30),
+                start_period=Duration.seconds(15),
+            )
+        )
+
+        datadog_container.add_environment(
+            name='ECS_FARGATE',
+            value='true'
+        )
+
+        datadog_container.add_environment(
+            name='DD_SITE',
+            value='datadoghq.eu'
+        )
+
+        datadog_container.add_environment(
+            name='DD_ECS_TASK_COLLECTION_ENABLED',
+            value='true'
         )
 
         table_name = ssm.StringParameter.value_from_lookup(

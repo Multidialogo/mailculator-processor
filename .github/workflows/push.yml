@@ -43,6 +43,7 @@ jobs:
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.PROD_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
             echo "SMTP_USER=${{ secrets.PROD_SMTP_USER }}" >> $GITHUB_ENV
             echo "SMTP_PASSWORD=${{ secrets.PROD_SMTP_PASSWORD }}" >> $GITHUB_ENV
+            echo "DD_API_KEY_SECRET_NAME=${{ secrets.PROD_DD_API_KEY_SECRET_NAME }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
             echo "ENVIRONMENT=stage" >> $GITHUB_ENV
             echo "SERVICE_CPU=${{ vars.STAGE_SERVICE_CPU }}" >> $GITHUB_ENV
@@ -58,6 +59,7 @@ jobs:
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.STAGE_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
             echo "SMTP_USER=${{ secrets.STAGE_SMTP_USER }}" >> $GITHUB_ENV
             echo "SMTP_PASSWORD=${{ secrets.STAGE_SMTP_PASSWORD }}" >> $GITHUB_ENV
+            echo "DD_API_KEY_SECRET_NAME=${{ secrets.STAGE_DD_API_KEY_SECRET_NAME }}" >> $GITHUB_ENV
           fi
 
       # Step 1: Checkout the repository

@@ -51,15 +51,22 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				return
 			}
 
-			statusCode := "RECEIVED-NOTIFIED"
-			if p.startStatus == outbox.StatusFailed {
+			var statusCode string
+			var reason string
+
+			if p.startStatus == outbox.StatusSent {
+				statusCode = "TRAVELING"
+				reason = "Consegnato al server di posta"
+			} else {
 				statusCode = "DISPATCH-ERROR"
+				reason = e.Reason
 			}
+
 			payload := map[string]any{
 				"code":        statusCode,
 				"reached_at":  e.UpdatedAt,
 				"message_ids": []string{e.Id},
-				"reason":      e.Reason,
+				"reason":      reason,
 			}
 
 			jsonBody, errJson := json.Marshal(payload)

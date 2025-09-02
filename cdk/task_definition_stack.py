@@ -295,7 +295,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='PIPELINE_INTERVAL',
-            value='5'
+            value='30'
         )
 
         container.add_environment(

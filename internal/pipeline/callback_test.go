@@ -5,13 +5,14 @@ package pipeline
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/testutils/mocks"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testServer struct {
@@ -55,7 +56,7 @@ func TestSuccessCallbackPipeline(t *testing.T) {
 		assert.Contains(t, ts.server.URL, ts.calledDomain)
 		assert.Equal(t, 1, ts.invocationCount)
 		assert.Equal(t,
-			"level=INFO msg=\"processing email 1\"",
+			"level=INFO msg=\"processing email 1\"\nlevel=INFO msg=\"callback successfully processed\" email=1",
 			strings.TrimSpace(buf.String()),
 		)
 	}
@@ -122,7 +123,7 @@ func TestAcknowledgedUpdateError(t *testing.T) {
 	callback.Process(context.TODO())
 
 	assert.Equal(t,
-		"level=INFO msg=\"processing email 1\"\nlevel=ERROR msg=\"error while updating status after callback, error: some update error\" email=1",
+		"level=INFO msg=\"processing email 1\"\nlevel=INFO msg=\"callback successfully processed\" email=1\nlevel=ERROR msg=\"error while updating status after callback, error: some update error\" email=1",
 		strings.TrimSpace(buf.String()),
 	)
 }
@@ -143,6 +144,7 @@ func TestStatusConflict(t *testing.T) {
 level=WARN msg="Response status code is 409. Try to call again {url} in 2 seconds. Attempt 1/3" email=1
 level=WARN msg="Response status code is 409. Try to call again {url} in 2 seconds. Attempt 2/3" email=1
 level=WARN msg="Response status code is 409. Attempt 3/3" email=1
-level=ERROR msg="Max retries exceeded for the url {url}" email=1`
+level=ERROR msg="Max retries exceeded for the url {url}" email=1
+level=ERROR msg="error on callback, status: 409, response: " email=1`
 	assert.Equal(t, strings.ReplaceAll(expectedMsgError, "{url}", ts.server.URL), strings.TrimSpace(buf.String()))
 }

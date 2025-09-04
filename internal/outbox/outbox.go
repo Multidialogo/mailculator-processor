@@ -2,13 +2,16 @@ package outbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/smithy-go"
 )
 
 const (
@@ -25,6 +28,12 @@ const (
 const (
 	statusIndex = "StatusIndex"
 	StatusMeta  = "_META"
+)
+
+const (
+	maxAttempts = 8
+	baseDelay   = 30 * time.Millisecond
+	maxDelay    = 1 * time.Second
 )
 
 type Email struct {
@@ -90,6 +99,69 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	return new(emailMarshaller).UnmarshalList(items)
 }
 
+func (o *Outbox) shouldRetryPartiQL(err error) bool {
+	var tce *types.TransactionCanceledException
+	if errors.As(err, &tce) {
+		for _, r := range tce.CancellationReasons {
+			if r.Code == nil {
+				// unknown reason -> conservative: retry
+				return true
+			}
+
+			code := *r.Code
+			if code == "TransactionConflict" {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	var ptee *types.ProvisionedThroughputExceededException
+	if errors.As(err, &ptee) {
+		return true
+	}
+
+	var ise *types.InternalServerError
+	if errors.As(err, &ise) {
+		return true
+	}
+
+	var riue *types.ResourceInUseException
+	if errors.As(err, &riue) {
+		return true
+	}
+
+	var rle *types.RequestLimitExceeded
+	if errors.As(err, &rle) {
+		return true
+	}
+
+	var tipe *types.TransactionInProgressException
+	if errors.As(err, &tipe) {
+		return true
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "ThrottlingException", "Throttling", "RequestLimitExceeded", "ServiceUnavailable":
+			return true
+		}
+	}
+
+	return false
+}
+
+func (o *Outbox) backoffDuration(attempt int) time.Duration {
+	max := min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
+	if max <= 0 {
+		max = baseDelay
+	}
+
+	return time.Duration(rand.Int63n(int64(max)))
+}
+
 func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
 	metaParams, _ := attributevalue.MarshalList([]any{
@@ -103,14 +175,30 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
 	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}})
 
-	ti := &dynamodb.ExecuteTransactionInput{
-		TransactStatements: []types.ParameterizedStatement{
-			{Statement: aws.String(metaStmt), Parameters: metaParams},
-			{Statement: aws.String(inStmt), Parameters: inParams},
-		},
+	var err error
+	for attempt := range maxAttempts {
+		ti := &dynamodb.ExecuteTransactionInput{
+			TransactStatements: []types.ParameterizedStatement{
+				{Statement: aws.String(metaStmt), Parameters: metaParams},
+				{Statement: aws.String(inStmt), Parameters: inParams},
+			},
+		}
+
+		_, err = o.db.ExecuteTransaction(ctx, ti)
+		if err == nil || !o.shouldRetryPartiQL(err) {
+			return err
+		}
+
+		sleep := o.backoffDuration(attempt)
+		timer := time.NewTimer(sleep)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 
-	_, err := o.db.ExecuteTransaction(ctx, ti)
 	return err
 }
 

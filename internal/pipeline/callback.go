@@ -129,7 +129,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				subLogger.Info("callback successfully processed")
 			}
 
-			if err = p.outbox.Update(ctx, e.Id, p.acknowledgedStatus, e.Reason); err != nil {
+			if err = p.outbox.Update(context.Background(), e.Id, p.acknowledgedStatus, e.Reason); err != nil {
 				subLogger.Error(fmt.Sprintf("error while updating status after callback, error: %v", err))
 			}
 		}()

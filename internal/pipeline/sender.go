@@ -49,10 +49,10 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 
 			if err = p.client.Send(e.EmlFilePath); err != nil {
 				logger.Error(fmt.Sprintf("failed to send, error: %v", err))
-				p.handle(ctx, logger, e.Id, outbox.StatusFailed, err.Error())
+				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, err.Error())
 			} else {
 				logger.Info("successfully sent")
-				p.handle(ctx, logger, e.Id, outbox.StatusSent, "")
+				p.handle(context.Background(), logger, e.Id, outbox.StatusSent, "")
 			}
 		}()
 	}

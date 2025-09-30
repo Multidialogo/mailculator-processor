@@ -82,9 +82,11 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				return
 			}
 
+			// TODO remove non-agnostic headers
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-MTRAX-SOURCE", "MULTIDIALOGO")
 
+			// TODO this could be clearer
 			resp := &http.Response{StatusCode: http.StatusConflict}
 
 			attempt := 0
@@ -98,6 +100,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				if resp.StatusCode == http.StatusConflict {
 					attempt++
 					retryMsg := ""
+					// TODO this could be clearer
 					var retryInterval time.Duration = 0
 
 					if attempt < p.cfg.MaxRetries {

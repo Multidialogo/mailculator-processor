@@ -1,0 +1,9 @@
+---
+config:
+  theme: neo
+---
+graph LR
+    A(FAILED) -- Query & Lock --> B(CALLING-FAILED-CALLBACK);
+    B -- Chiamata HTTP POST --> C{Successo?};
+    C -- Sì --> D(FAILED-ACKNOWLEDGED);
+    C -- No --> E[Retry/<b>Da recuperare</b>];

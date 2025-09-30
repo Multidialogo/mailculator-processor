@@ -1,0 +1,9 @@
+---
+config:
+  theme: neo
+---
+graph LR
+    A(READY) -- Query & Lock --> B(PROCESSING);
+    B -- Invio SMTP --> C{Successo?};
+    C -- Sì --> D(SENT);
+    C -- No --> E(FAILED);

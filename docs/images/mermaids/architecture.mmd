@@ -1,0 +1,22 @@
+---
+config:
+  theme: neo
+  layout: dagre
+---
+flowchart TD
+ subgraph App["Multicarrier Email (Daemon)"]
+        Pipelines("3x Pipeline Parallele <br>(invio, callback successo e fail)")
+        AppCore("Start")
+        DataLayer("Data Layer<br>(Outbox Service)")
+        SmtpClient("SMTP Client")
+  end
+ subgraph Storage["Database"]
+        DynamoDB[("DynamoDB")]
+  end
+ subgraph External["Servizi Esterni"]
+        SMTPServer[("SES")]
+  end
+    AppCore --> Pipelines
+    Pipelines --> DataLayer & SmtpClient
+    DataLayer --> DynamoDB
+    SmtpClient --> SMTPServer

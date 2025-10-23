@@ -46,7 +46,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 			p.logger.Info(fmt.Sprintf("processing email %v", e.Id))
 			subLogger := p.logger.With("email", e.Id)
 
-			if err = p.outbox.Update(ctx, e.Id, p.processingStatus, e.Reason); err != nil {
+			if err = p.outbox.Update(ctx, e.Id, p.processingStatus, e.Reason, e.TTL); err != nil {
 				subLogger.Warn(fmt.Sprintf("failed to acquire processing lock, error: %v", err))
 				return
 			}
@@ -132,7 +132,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				subLogger.Info("callback successfully processed")
 			}
 
-			if err = p.outbox.Update(context.Background(), e.Id, p.acknowledgedStatus, e.Reason); err != nil {
+			if err = p.outbox.Update(context.Background(), e.Id, p.acknowledgedStatus, e.Reason, e.TTL); err != nil {
 				subLogger.Error(fmt.Sprintf("error while updating status after callback, error: %v", err))
 			}
 		}()

@@ -15,7 +15,17 @@ type Email struct {
     EmlFilePath string  // Path del file .eml su EFS
     UpdatedAt   string  // Timestamp RFC3339 dell'ultimo aggiornamento
     Reason      string  // Motivo dell'ultimo stato
+    TTL         int64   // Timestamp Unix in secondi per DynamoDB TTL
 }
+```
+
+### Time To Live (TTL)
+DynamoDB TTL è configurato per eliminare automaticamente i record obsoleti. L'attributo `TTL` deve contenere un timestamp Unix (epoch time) in secondi che indica quando il record deve essere eliminato. 
+
+**Esempio**:
+```go
+// Record che scade tra 7 giorni
+ttl := time.Now().Add(7 * 24 * time.Hour).Unix()
 ```
 
 ## Pattern di Versionamento

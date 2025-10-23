@@ -42,17 +42,17 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 			p.logger.Info(fmt.Sprintf("processing outbox %v", e.Id))
 			logger := p.logger.With("outbox", e.Id)
 
-			if err = p.outbox.Update(ctx, e.Id, outbox.StatusProcessing, ""); err != nil {
+			if err = p.outbox.Update(ctx, e.Id, outbox.StatusProcessing, "", e.TTL); err != nil {
 				logger.Warn(fmt.Sprintf("failed to acquire processing lock, error: %v", err))
 				return
 			}
 
 			if err = p.client.Send(e.EmlFilePath); err != nil {
 				logger.Error(fmt.Sprintf("failed to send, error: %v", err))
-				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, err.Error())
+				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, err.Error(), e.TTL)
 			} else {
 				logger.Info("successfully sent")
-				p.handle(context.Background(), logger, e.Id, outbox.StatusSent, "")
+				p.handle(context.Background(), logger, e.Id, outbox.StatusSent, "", e.TTL)
 			}
 		}()
 	}
@@ -60,8 +60,8 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 	wg.Wait()
 }
 
-func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, emailId string, status string, errorReason string) {
-	if err := p.outbox.Update(ctx, emailId, status, errorReason); err != nil {
+func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, emailId string, status string, errorReason string, ttl int64) {
+	if err := p.outbox.Update(ctx, emailId, status, errorReason, ttl); err != nil {
 		msg := fmt.Sprintf("error updating status to %v, error: %v", status, err)
 		logger.Error(msg)
 	}

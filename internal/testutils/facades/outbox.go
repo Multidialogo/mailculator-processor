@@ -3,17 +3,18 @@ package facades
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
-	"io"
-	"log"
-	"os"
-	"strings"
-	"time"
 )
 
 func NewAwsConfigFromEnv() aws.Config {
@@ -64,6 +65,7 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 			"Latest":      status,
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": emlFilePath,
+			"TTL":         time.Now().Add(1 * time.Hour).Unix(),
 		},
 	})
 	if err != nil {

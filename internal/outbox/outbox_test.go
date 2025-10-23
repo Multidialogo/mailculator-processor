@@ -109,7 +109,7 @@ func TestUpdate_WhenDatabaseReturnNoError_ShouldReturnNoError(t *testing.T) {
 	dbMock := &dynamodbMock{transactionOutput: &dynamodb.ExecuteTransactionOutput{}}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "READY", "")
+	err := sut.Update(context.TODO(), "12345", "READY", "", 1234567890)
 	assert.NoError(t, err)
 }
 
@@ -120,6 +120,34 @@ func TestUpdate_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
 	dbMock := &dynamodbMock{returnError: expectedError}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "READY", "")
+	err := sut.Update(context.TODO(), "12345", "READY", "", 1234567890)
 	assert.ErrorIs(t, expectedError, err)
+}
+
+func TestQuery_WhenTTLIsInvalidType_ShouldReturnError(t *testing.T) {
+	t.Parallel()
+
+	record, _ := attributevalue.MarshalMap(map[string]any{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]any{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+			"TTL":         "invalid-string-value",
+		},
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
+	}
+
+	sut := &Outbox{db: dbMock}
+
+	_, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "error unmarshalling TTL")
+	assert.Contains(t, err.Error(), "TTL must be an integer")
 }

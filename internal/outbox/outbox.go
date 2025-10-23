@@ -42,6 +42,7 @@ type Email struct {
 	EmlFilePath string
 	UpdatedAt   string
 	Reason      string
+	TTL         int64
 }
 
 type dynamodbInterface interface {
@@ -162,7 +163,7 @@ func (o *Outbox) backoffDuration(attempt int) time.Duration {
 	return time.Duration(rand.Int63n(int64(max)))
 }
 
-func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {
+func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, ttl int64) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
 	metaParams, _ := attributevalue.MarshalList([]any{
 		status,
@@ -173,7 +174,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	})
 
 	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
-	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}})
+	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{"TTL": ttl}})
 
 	var err error
 	for attempt := range maxAttempts {
@@ -210,6 +211,23 @@ type emailItemRow struct {
 
 type emailMarshaller struct{}
 
+func (m *emailMarshaller) unmarshalTTL(value any) (int64, error) {
+	if value == nil {
+		return 0, nil
+	}
+
+	switch v := value.(type) {
+	case int64:
+		return v, nil
+	case float64:
+		return int64(v), nil
+	case int:
+		return int64(v), nil
+	default:
+		return 0, fmt.Errorf("TTL must be an integer, got %T", value)
+	}
+}
+
 func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeValue) (emails []Email, err error) {
 	var items []emailItemRow
 	err = attributevalue.UnmarshalListOfMaps(attrsList, &items)
@@ -218,12 +236,18 @@ func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeVa
 	}
 
 	for _, item := range items {
+		ttl, err := m.unmarshalTTL(item.Attributes["TTL"])
+		if err != nil {
+			return []Email{}, fmt.Errorf("error unmarshalling TTL for email %s: %w", item.Id, err)
+		}
+
 		emails = append(emails, Email{
 			Id:          item.Id,
 			Status:      fmt.Sprint(item.Attributes["Latest"]),
 			EmlFilePath: fmt.Sprint(item.Attributes["EMLFilePath"]),
 			UpdatedAt:   fmt.Sprint(item.Attributes["UpdatedAt"]),
 			Reason:      fmt.Sprint(item.Attributes["Reason"]),
+			TTL:         ttl,
 		})
 	}
 

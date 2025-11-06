@@ -19,6 +19,7 @@ export SMTP_ALLOW_INSECURE_TLS=true
 export PIPELINE_INTERVAL=1
 export PIPELINE_CALLBACK_URL=http://127.0.0.1:8080
 export EMAIL_OUTBOX_TABLE=Outbox
+export EML_STORAGE_PATH=testdata/.out/eml
 
 if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --build --force-recreate; then
   echo "Could not start test dependencies"

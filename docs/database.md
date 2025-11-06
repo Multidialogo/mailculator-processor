@@ -10,12 +10,13 @@
 ### Attributi
 ```go
 type Email struct {
-    Id          string  // Chiave primaria
-    Status      string  // Sort key / Stato corrente
-    EmlFilePath string  // Path del file .eml su EFS
-    UpdatedAt   string  // Timestamp RFC3339 dell'ultimo aggiornamento
-    Reason      string  // Motivo dell'ultimo stato
-    TTL         int64   // Timestamp Unix in secondi per DynamoDB TTL
+    Id              string  // Chiave primaria
+    Status          string  // Sort key / Stato corrente
+    EmlFilePath     string  // Path del file .eml su EFS
+    PayloadFilePath string  // Path del file .json contenente il payload per intake
+    UpdatedAt       string  // Timestamp RFC3339 dell'ultimo aggiornamento
+    Reason          string  // Motivo dell'ultimo stato
+    TTL             int64   // Timestamp Unix in secondi per DynamoDB TTL
 }
 ```
 
@@ -56,14 +57,17 @@ INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}
 ```
 
 ## Stati Disponibili
-- `READY`
-- `PROCESSING`
-- `SENT`
-- `FAILED`
-- `CALLING-SENT-CALLBACK`
-- `CALLING-FAILED-CALLBACK`
-- `SENT-ACKNOWLEDGED`
-- `FAILED-ACKNOWLEDGED`
+- `ACCEPTED` - Email accettato, in attesa di intake
+- `INTAKING` - Email in fase di elaborazione intake
+- `READY` - Email pronto per l'invio
+- `PROCESSING` - Email in fase di elaborazione per l'invio
+- `SENT` - Email inviato con successo
+- `FAILED` - Invio email fallito
+- `INVALID` - Intake email fallito
+- `CALLING-SENT-CALLBACK` - In corso chiamata callback per email inviato
+- `CALLING-FAILED-CALLBACK` - In corso chiamata callback per email fallito
+- `SENT-ACKNOWLEDGED` - Callback per email inviato completato
+- `FAILED-ACKNOWLEDGED` - Callback per email fallito completato
 
 ## Query Pattern
 

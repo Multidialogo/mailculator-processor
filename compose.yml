@@ -23,6 +23,7 @@ services:
       PIPELINE_INTERVAL: '1'
       PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
       EMAIL_OUTBOX_TABLE: 'Outbox'
+      EML_STORAGE_PATH: 'testdata/.out/eml'
     command: >
       sh -c "go mod tidy &&
              ./scripts/coverage.sh unit &&

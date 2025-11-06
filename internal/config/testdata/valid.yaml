@@ -3,6 +3,9 @@ callback:
   retry_interval: 5
   url: "dummy-domain.com"
 
+eml-storage:
+  path: "/efs/eml"
+
 health-check:
   server:
     port: 8080

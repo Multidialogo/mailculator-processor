@@ -15,10 +15,13 @@ import (
 )
 
 const (
+	StatusAccepted              = "ACCEPTED"
+	StatusIntaking              = "INTAKING"
 	StatusReady                 = "READY"
 	StatusProcessing            = "PROCESSING"
 	StatusSent                  = "SENT"
 	StatusFailed                = "FAILED"
+	StatusInvalid               = "INVALID"
 	StatusCallingSentCallback   = "CALLING-SENT-CALLBACK"
 	StatusCallingFailedCallback = "CALLING-FAILED-CALLBACK"
 	StatusSentAcknowledged      = "SENT-ACKNOWLEDGED"
@@ -37,12 +40,13 @@ const (
 )
 
 type Email struct {
-	Id          string
-	Status      string
-	EmlFilePath string
-	UpdatedAt   string
-	Reason      string
-	TTL         int64
+	Id              string
+	Status          string
+	EmlFilePath     string
+	PayloadFilePath string
+	UpdatedAt       string
+	Reason          string
+	TTL             int64
 }
 
 type dynamodbInterface interface {
@@ -203,6 +207,46 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	return err
 }
 
+func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl int64) error {
+	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.EMLFilePath=? WHERE Id=? AND Status=?", o.tableName)
+	metaParams, _ := attributevalue.MarshalList([]any{
+		StatusReady,
+		time.Now().Format(time.RFC3339),
+		emlFilePath,
+		id,
+		StatusMeta,
+	})
+
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
+	inParams, _ := attributevalue.MarshalList([]any{id, StatusReady, map[string]any{"TTL": ttl}})
+
+	var err error
+	for attempt := range maxAttempts {
+		ti := &dynamodb.ExecuteTransactionInput{
+			TransactStatements: []types.ParameterizedStatement{
+				{Statement: aws.String(metaStmt), Parameters: metaParams},
+				{Statement: aws.String(inStmt), Parameters: inParams},
+			},
+		}
+
+		_, err = o.db.ExecuteTransaction(ctx, ti)
+		if err == nil || !o.shouldRetryPartiQL(err) {
+			return err
+		}
+
+		sleep := o.backoffDuration(attempt)
+		timer := time.NewTimer(sleep)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return err
+}
+
 type emailItemRow struct {
 	Id         string         `dynamodbav:"Id"`
 	Status     string         `dynamodbav:"Status"`
@@ -242,12 +286,13 @@ func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeVa
 		}
 
 		emails = append(emails, Email{
-			Id:          item.Id,
-			Status:      fmt.Sprint(item.Attributes["Latest"]),
-			EmlFilePath: fmt.Sprint(item.Attributes["EMLFilePath"]),
-			UpdatedAt:   fmt.Sprint(item.Attributes["UpdatedAt"]),
-			Reason:      fmt.Sprint(item.Attributes["Reason"]),
-			TTL:         ttl,
+			Id:              item.Id,
+			Status:          fmt.Sprint(item.Attributes["Latest"]),
+			EmlFilePath:     fmt.Sprint(item.Attributes["EMLFilePath"]),
+			PayloadFilePath: fmt.Sprint(item.Attributes["PayloadFilePath"]),
+			UpdatedAt:       fmt.Sprint(item.Attributes["UpdatedAt"]),
+			Reason:          fmt.Sprint(item.Attributes["Reason"]),
+			TTL:             ttl,
 		})
 	}
 

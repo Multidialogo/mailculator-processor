@@ -7,6 +7,9 @@ health-check:
   server:
     port: 8080
 
+eml-storage:
+  path: "/efs/eml"
+
 outbox:
   table-name: "Outbox"
 

@@ -53,9 +53,14 @@ type SmtpConfig struct {
 	AllowInsecureTls bool   `yaml:"allow_insecure_tls"`
 }
 
+type EmlStorageConfig struct {
+	Path string `yaml:"path" validate:"required"`
+}
+
 type Config struct {
 	Aws         AwsConfig         `yaml:"aws,flow"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
+	EmlStorage  EmlStorageConfig  `yaml:"eml-storage,flow" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
 	Outbox      OutboxConfig      `yaml:"outbox,flow" validate:"required"`
 	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
@@ -138,4 +143,8 @@ func (c *Config) GetSmtpConfig() smtp.Config {
 		From:             c.Smtp.From,
 		AllowInsecureTls: c.Smtp.AllowInsecureTls,
 	}
+}
+
+func (c *Config) GetEmlStoragePath() string {
+	return c.EmlStorage.Path
 }

@@ -12,6 +12,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+MD_REST_VOLUME_NAME = 'rest-volume'
 MC_VOLUME_NAME = 'mc-volume'
 
 MULTICARRIER_EMAIL_ID = 'multicarrier-email'
@@ -34,6 +35,7 @@ class TaskDefinitionStack(Stack):
 
         service_name = env_parameters['SERVICE_NAME']
         selected_environment = env_parameters['SELECTED_ENVIRONMENT']
+        md_rest_efs_folder_name = env_parameters['MD_REST_EFS_FOLDER_NAME']
         mc_email_efs_folder_name = env_parameters['MC_EMAIL_EFS_FOLDER_NAME']
         service_cpu = env_parameters['SERVICE_CPU']
         service_memory = env_parameters['SERVICE_MEMORY']
@@ -45,6 +47,9 @@ class TaskDefinitionStack(Stack):
         mc_eml_efs_access_point_id_parameter_name = env_parameters['MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME']
         mc_eml_efs_id_parameter_name = env_parameters['MC_EML_EFS_ID_PARAMETER_NAME']
         repository_name_parameter_name = env_parameters['REPOSITORY_NAME_PARAMETER_NAME']
+        md_rest_efs_id_parameter_name = env_parameters['MD_REST_EFS_ID_PARAMETER_NAME']
+        md_rest_access_point_arn_parameter_name = env_parameters['MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME']
+        md_rest_access_point_id_parameter_name = env_parameters['MD_REST_ACCESS_POINT_ID_PARAMETER_NAME']
         tmp_task_definition_arn_parameter_name = env_parameters['TMP_TASK_DEFINITION_ARN_PARAMETER_NAME']
         ses_smtp_credentials_secret_name = env_parameters['SES_SMTP_CREDENTIALS_SECRET_NAME']
         callback_endpoint_parameter_name = env_parameters['CALLBACK_ENDPOINT_PARAMETER_NAME']
@@ -54,6 +59,11 @@ class TaskDefinitionStack(Stack):
         dd_api_key_secret_name = env_parameters['DD_API_KEY_SECRET_NAME']
 
         task_definition_family = f'{selected_environment}-{service_name}'
+
+        md_rest_access_point_arn = ssm.StringParameter.value_from_lookup(
+            scope=self,
+            parameter_name=md_rest_access_point_arn_parameter_name
+        )
 
         task_definition = ecs.FargateTaskDefinition(
             scope=self,
@@ -93,6 +103,16 @@ class TaskDefinitionStack(Stack):
                     mc_eml_access_point_arn
                 ]
             )
+        )
+
+        md_rest_efs_id = ssm.StringParameter.value_from_lookup(
+            scope=self,
+            parameter_name=md_rest_efs_id_parameter_name,
+        )
+
+        md_rest_access_point_id = ssm.StringParameter.value_from_lookup(
+            scope=self,
+            parameter_name=md_rest_access_point_id_parameter_name,
         )
 
         repository_name = ssm.StringParameter.value_from_lookup(
@@ -172,6 +192,18 @@ class TaskDefinitionStack(Stack):
         )
 
         task_definition.add_volume(
+            name=MD_REST_VOLUME_NAME,
+            efs_volume_configuration=ecs.EfsVolumeConfiguration(
+                file_system_id=md_rest_efs_id,
+                transit_encryption='ENABLED',
+                authorization_config=ecs.AuthorizationConfig(
+                    access_point_id=md_rest_access_point_id,
+                    iam='ENABLED'
+                )
+            )
+        )
+
+        task_definition.add_volume(
             name=MC_VOLUME_NAME,
             efs_volume_configuration=ecs.EfsVolumeConfiguration(
                 file_system_id=mc_email_efs_id,
@@ -184,6 +216,11 @@ class TaskDefinitionStack(Stack):
         )
 
         container.add_mount_points(
+            ecs.MountPoint(
+                container_path=md_rest_efs_folder_name,
+                source_volume=MD_REST_VOLUME_NAME,
+                read_only=True
+            ),
             ecs.MountPoint(
                 container_path=mc_email_efs_folder_name,
                 source_volume=MC_VOLUME_NAME,
@@ -276,6 +313,16 @@ class TaskDefinitionStack(Stack):
                     f'{table.table_arn}/index/*'
                 ]
             )
+        )
+
+        container.add_environment(
+            name='ATTACHMENTS_BASE_PATH',
+            value=md_rest_efs_folder_name
+        )
+
+        container.add_environment(
+            name='EML_STORAGE_PATH',
+            value=mc_email_efs_folder_name + "/emls"
         )
 
         container.add_environment(

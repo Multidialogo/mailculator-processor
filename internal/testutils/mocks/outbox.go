@@ -64,3 +64,11 @@ func (m *OutboxMock) Update(ctx context.Context, id string, status string, error
 	}
 	return nil
 }
+
+func (m *OutboxMock) Ready(ctx context.Context, id string, emlFilePath string, ttl int64) error {
+	m.updateMethodCall++
+	if m.updateMethodCall == m.updateMethodFailsCall {
+		return m.updateMethodError
+	}
+	return nil
+}

@@ -61,13 +61,18 @@ func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
 	}
 }
 
+func (cp *configProviderMock) GetEmlStoragePath() string {
+	return "/efs/eml"
+}
+
 func TestAppInstance(t *testing.T) {
 	app, errNew := New(newConfigProviderMock())
 	require.NoError(t, errNew)
-	require.Equal(t, 3, len(app.pipes))
+	require.Equal(t, 4, len(app.pipes))
 	assert.NotZero(t, app.pipes[0])
 	assert.NotZero(t, app.pipes[1])
 	assert.NotZero(t, app.pipes[2])
+	assert.NotZero(t, app.pipes[3])
 }
 
 type processorMock struct {

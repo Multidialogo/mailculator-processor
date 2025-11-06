@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
+	"mailculator-processor/internal/eml"
 	"mailculator-processor/internal/healthcheck"
 	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/pipeline"
@@ -33,19 +34,22 @@ type configProvider interface {
 	GetCallbackConfig() pipeline.CallbackConfig
 	GetOutboxTableName() string
 	GetSmtpConfig() smtp.Config
+	GetEmlStoragePath() string
 }
 
 func New(cp configProvider) (*App, error) {
 	db := dynamodb.NewFromConfig(cp.GetAwsConfig())
 	client := smtp.New(cp.GetSmtpConfig())
 	outboxService := outbox.NewOutbox(db, cp.GetOutboxTableName())
+	emlStorage := eml.NewEMLStorage(cp.GetEmlStoragePath())
 
+	intakePipe := pipeline.NewIntakePipeline(outboxService, emlStorage)
 	mainSenderPipe := pipeline.NewMainSenderPipeline(outboxService, client)
 	callbackConfig := cp.GetCallbackConfig()
 	sentCallbackPipe := pipeline.NewSentCallbackPipeline(outboxService, callbackConfig)
 	failedCallbackPipe := pipeline.NewFailedCallbackPipeline(outboxService, callbackConfig)
 
-	pipes := []pipelineProcessor{mainSenderPipe, sentCallbackPipe, failedCallbackPipe}
+	pipes := []pipelineProcessor{intakePipe, mainSenderPipe, sentCallbackPipe, failedCallbackPipe}
 	healthCheckServer := healthcheck.NewServer(cp.GetHealthCheckServerPort())
 
 	return &App{

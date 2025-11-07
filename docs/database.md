@@ -43,7 +43,7 @@ ttl := time.Now().Add(7 * 24 * time.Hour).Unix()
 ### Struttura Dati
 Ogni email ha due tipi di record:
 1. **Record Meta**: `Status = "_META"` con `Attributes.Latest = "{stato_corrente}"`
-2. **Record Stato**: `Status = "{stato_corrente}"` con `Attributes = {}` (vuoto)
+2. **Record Stato**: `Status = "{stato_corrente}"` con `Attributes = {"TTL": timestamp}`
 
 ### Transazione Update
 Ogni cambio di stato esegue una transazione con due statement:

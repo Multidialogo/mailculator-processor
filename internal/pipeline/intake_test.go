@@ -163,7 +163,7 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 	
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=INFO msg=\"processing outbox 1\"")
-	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to intake")
+	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "failed to read payload file")
 }
 
@@ -193,7 +193,7 @@ func TestIntakeInvalidJSON(t *testing.T) {
 	intake.Process(context.TODO())
 	
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
-	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to intake")
+	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "failed to unmarshal payload")
 }
 
@@ -224,7 +224,7 @@ func TestIntakeValidationError(t *testing.T) {
 	intake.Process(context.TODO())
 	
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
-	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to intake")
+	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "payload validation failed")
 }
 
@@ -257,7 +257,7 @@ func TestIntakeStorageError(t *testing.T) {
 	intake.Process(context.TODO())
 	
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
-	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to intake")
+	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "failed to store EML")
 }
 

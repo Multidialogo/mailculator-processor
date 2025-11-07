@@ -58,6 +58,7 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 	metaStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", of.tableName)
 	id := uuid.NewString()
 	status := "READY"
+	ttl := time.Now().Add(1 * time.Hour).Unix()
 	metaParams, err := attributevalue.MarshalList([]any{
 		id,
 		of.statusMeta,
@@ -65,15 +66,15 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 			"Latest":      status,
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": emlFilePath,
-			"TTL":         time.Now().Add(1 * time.Hour).Unix(),
+			"TTL":         ttl,
 		},
 	})
 	if err != nil {
 		return "", err
 	}
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?}", of.tableName)
-	inParams, err := attributevalue.MarshalList([]any{id, status, map[string]any{}})
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", of.tableName)
+	inParams, err := attributevalue.MarshalList([]any{id, status, map[string]any{"TTL": ttl}})
 	if err != nil {
 		return "", err
 	}

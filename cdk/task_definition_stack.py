@@ -77,6 +77,17 @@ class TaskDefinitionStack(Stack):
             policy=RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE
         )
 
+        task_definition.add_to_execution_role_policy(
+            statement=iam.PolicyStatement(
+                actions=[
+                    'elasticfilesystem:ClientMount'
+                ],
+                resources=[
+                    md_rest_access_point_arn
+                ]
+            )
+        )
+
         mc_eml_access_point_arn = ssm.StringParameter.value_from_lookup(
             scope=self,
             parameter_name=mc_eml_efs_access_point_arn_parameter_name,

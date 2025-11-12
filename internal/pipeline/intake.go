@@ -32,18 +32,20 @@ type emlStorageService interface {
 }
 
 type IntakePipeline struct {
-	outbox     outboxService
-	emlStorage emlStorageService
-	logger     *slog.Logger
-	validator  *validator.Validate
+	outbox              outboxService
+	emlStorage          emlStorageService
+	attachmentsBasePath string
+	logger              *slog.Logger
+	validator           *validator.Validate
 }
 
-func NewIntakePipeline(outbox outboxService, emlStorage emlStorageService) *IntakePipeline {
+func NewIntakePipeline(outbox outboxService, emlStorage emlStorageService, attachmentsBasePath string) *IntakePipeline {
 	return &IntakePipeline{
-		outbox:     outbox,
-		emlStorage: emlStorage,
-		logger:     slog.With("pipe", "intake"),
-		validator:  validator.New(),
+		outbox:              outbox,
+		emlStorage:          emlStorage,
+		attachmentsBasePath: attachmentsBasePath,
+		logger:              slog.With("pipe", "intake"),
+		validator:           validator.New(),
 	}
 }
 
@@ -101,6 +103,12 @@ func (p *IntakePipeline) createAndStoreEml(e outbox.Email) (string, error) {
 		return "", fmt.Errorf("payload validation failed: %w", err)
 	}
 
+	// Prepend base path to attachments
+	attachmentsWithBasePath := make([]string, len(payload.Attachments))
+	for i, attachment := range payload.Attachments {
+		attachmentsWithBasePath[i] = p.attachmentsBasePath + attachment
+	}
+
 	emlData := eml.EML{
 		MessageId:     payload.Id,
 		From:          payload.From,
@@ -110,7 +118,7 @@ func (p *IntakePipeline) createAndStoreEml(e outbox.Email) (string, error) {
 		BodyHTML:      payload.BodyHTML,
 		BodyText:      payload.BodyText,
 		Date:          time.Now(),
-		Attachments:   payload.Attachments,
+		Attachments:   attachmentsWithBasePath,
 		CustomHeaders: payload.CustomHeaders,
 	}
 

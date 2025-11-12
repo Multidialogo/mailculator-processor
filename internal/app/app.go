@@ -35,6 +35,7 @@ type configProvider interface {
 	GetOutboxTableName() string
 	GetSmtpConfig() smtp.Config
 	GetEmlStoragePath() string
+	GetAttachmentsBasePath() string
 }
 
 func New(cp configProvider) (*App, error) {
@@ -43,7 +44,7 @@ func New(cp configProvider) (*App, error) {
 	outboxService := outbox.NewOutbox(db, cp.GetOutboxTableName())
 	emlStorage := eml.NewEMLStorage(cp.GetEmlStoragePath())
 
-	intakePipe := pipeline.NewIntakePipeline(outboxService, emlStorage)
+	intakePipe := pipeline.NewIntakePipeline(outboxService, emlStorage, cp.GetAttachmentsBasePath())
 	mainSenderPipe := pipeline.NewMainSenderPipeline(outboxService, client)
 	callbackConfig := cp.GetCallbackConfig()
 	sentCallbackPipe := pipeline.NewSentCallbackPipeline(outboxService, callbackConfig)

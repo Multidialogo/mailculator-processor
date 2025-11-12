@@ -65,6 +65,10 @@ func (cp *configProviderMock) GetEmlStoragePath() string {
 	return "/efs/eml"
 }
 
+func (cp *configProviderMock) GetAttachmentsBasePath() string {
+	return "/base/attachments/path/"
+}
+
 func TestAppInstance(t *testing.T) {
 	app, errNew := New(newConfigProviderMock())
 	require.NoError(t, errNew)

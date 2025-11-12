@@ -1,6 +1,9 @@
 aws:
   base_endpoint: "${AWS_BASE_ENDPOINT}"
 
+attachments:
+  base-path: "${ATTACHMENTS_BASE_PATH}"
+
 callback:
   max_retries: 3
   retry_interval: 5

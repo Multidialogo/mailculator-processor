@@ -86,7 +86,7 @@ func TestSuccessfulIntake(t *testing.T) {
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	buf, logger := mocks.NewLoggerMock()
 	
-	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock)
+	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
 	
 	intake.Process(context.TODO())
@@ -101,7 +101,7 @@ func TestIntakeQueryError(t *testing.T) {
 	outboxServiceMock := mocks.NewOutboxMock(mocks.QueryMethodError(errors.New("some query error")))
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	
-	intake := IntakePipeline{outboxServiceMock, emlStorageMock, logger, nil}
+	intake := IntakePipeline{outboxServiceMock, emlStorageMock, "/base/path/", logger, nil}
 	
 	intake.Process(context.TODO())
 	
@@ -133,7 +133,7 @@ func TestIntakeUpdateError(t *testing.T) {
 	)
 	
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
-	intake := IntakePipeline{outboxServiceMock, emlStorageMock, logger, nil}
+	intake := IntakePipeline{outboxServiceMock, emlStorageMock, "/base/path/", logger, nil}
 	
 	intake.Process(context.TODO())
 	
@@ -156,7 +156,7 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 	)
 	
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
-	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock)
+	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
 	
 	intake.Process(context.TODO())
@@ -187,7 +187,7 @@ func TestIntakeInvalidJSON(t *testing.T) {
 	)
 	
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
-	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock)
+	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
 	
 	intake.Process(context.TODO())
@@ -218,7 +218,7 @@ func TestIntakeValidationError(t *testing.T) {
 	)
 	
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
-	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock)
+	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
 	
 	intake.Process(context.TODO())
@@ -251,7 +251,7 @@ func TestIntakeStorageError(t *testing.T) {
 	)
 	
 	emlStorageMock := newEmlStorageMock(errors.New("storage error"), "")
-	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock)
+	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
 	
 	intake.Process(context.TODO())

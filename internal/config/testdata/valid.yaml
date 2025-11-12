@@ -1,3 +1,6 @@
+attachments:
+  base-path: "/base/attachments/path"
+
 callback:
   max_retries: 3
   retry_interval: 5

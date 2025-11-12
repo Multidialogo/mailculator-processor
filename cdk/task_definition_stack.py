@@ -333,7 +333,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='EML_STORAGE_PATH',
-            value=mc_email_efs_folder_name + "/emls"
+            value=mc_email_efs_folder_name + "/eml"
         )
 
         container.add_environment(

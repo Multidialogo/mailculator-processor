@@ -18,6 +18,7 @@ export SMTP_FROM=mailer@example.com
 export SMTP_ALLOW_INSECURE_TLS=true
 export PIPELINE_INTERVAL=1
 export PIPELINE_CALLBACK_URL=http://127.0.0.1:8080
+export ATTACHMENTS_BASE_PATH=testdata/attachments
 export EMAIL_OUTBOX_TABLE=Outbox
 export EML_STORAGE_PATH=testdata/.out/eml
 

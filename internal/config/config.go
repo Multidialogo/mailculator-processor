@@ -53,11 +53,16 @@ type SmtpConfig struct {
 	AllowInsecureTls bool   `yaml:"allow_insecure_tls"`
 }
 
+type AttachmentsConfig struct {
+	BasePath string `yaml:"base-path" validate:"required"`
+}
+
 type EmlStorageConfig struct {
 	Path string `yaml:"path" validate:"required"`
 }
 
 type Config struct {
+	Attachments AttachmentsConfig `yaml:"attachments,flow" validate:"required"`
 	Aws         AwsConfig         `yaml:"aws,flow"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
 	EmlStorage  EmlStorageConfig  `yaml:"eml-storage,flow" validate:"required"`
@@ -147,4 +152,8 @@ func (c *Config) GetSmtpConfig() smtp.Config {
 
 func (c *Config) GetEmlStoragePath() string {
 	return c.EmlStorage.Path
+}
+
+func (c *Config) GetAttachmentsBasePath() string {
+	return c.Attachments.BasePath
 }

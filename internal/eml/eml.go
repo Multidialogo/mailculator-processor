@@ -166,17 +166,74 @@ func (w *Writer) isHeaderInList(slice []string, item string) bool {
 	return false
 }
 
+// canFoldHeader checks if a header can be folded
+// While RFC 5322 allows folding for all headers, we conservatively avoid
+// folding headers that contain email addresses to prevent SMTP compatibility issues
+func (w *Writer) canFoldHeader(key string) bool {
+	// Headers containing email addresses should NOT be folded for SMTP compatibility
+	emailHeaders := []string{
+		"From", "To", "Cc", "Bcc", "Reply-To", "Sender",
+		"Resent-From", "Resent-To", "Resent-Cc", "Resent-Bcc", "Resent-Sender",
+	}
+
+	for _, emailHeader := range emailHeaders {
+		if strings.EqualFold(key, emailHeader) {
+			return false
+		}
+	}
+
+	// Structured MIME headers should also not be folded for compatibility
+	mimeHeaders := []string{
+		"Content-Type", "Content-Disposition", "Content-Transfer-Encoding",
+		"Content-ID", "Content-Description",
+	}
+
+	for _, mimeHeader := range mimeHeaders {
+		if strings.EqualFold(key, mimeHeader) {
+			return false
+		}
+	}
+
+	// Other headers like Subject, Date, Message-Id can be folded
+	return true
+}
+
 // writeFoldedHeader writes a header line with proper MIME folding (max 76 characters per line)
 func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
 	headerLine := fmt.Sprintf("%s: %s\r\n", key, value)
 
-	// If the header line is within the 76 character limit, write it directly
+	// For headers that should not be folded (email addresses, structured headers)
+	if !w.canFoldHeader(key) {
+		// Ensure they don't exceed reasonable limits to avoid SMTP server rejections
+		if len(headerLine) > 998 {
+			// Truncate the value if too long, keeping the header name
+			maxValueLen := 998 - len(key) - 2 // -2 for ": "
+			if maxValueLen > 0 {
+				value = value[:maxValueLen]
+				headerLine = fmt.Sprintf("%s: %s\r\n", key, value)
+			}
+		}
+		_, err := target.Write([]byte(headerLine))
+		return err
+	}
+
+	// For foldable headers, ensure they don't exceed RFC 5322 line limit
+	if len(headerLine) > 998 {
+		// Truncate the value if too long, keeping the header name
+		maxValueLen := 998 - len(key) - 2 // -2 for ": "
+		if maxValueLen > 0 {
+			value = value[:maxValueLen]
+			headerLine = fmt.Sprintf("%s: %s\r\n", key, value)
+		}
+	}
+
+	// If the header line fits within 76 characters, write it directly
 	if len(headerLine) <= 76 {
 		_, err := target.Write([]byte(headerLine))
 		return err
 	}
 
-	// Otherwise, fold the header: write the first part, then continue with space
+	// Fold the header: write the first part, then continue with space
 	firstLine := headerLine[:76]
 	if !strings.Contains(firstLine, "\r\n") {
 		// Find the last space before position 76 to break nicely

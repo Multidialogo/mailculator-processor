@@ -67,6 +67,11 @@ func (w *Writer) writePart(multipartWriter *multipart.Writer, contentType, chars
 		return fmt.Errorf("failed to write part body: %w", err)
 	}
 
+	// Ensure a blank line after the part content for proper MIME formatting
+	if _, err = part.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write blank line after part: %w", err)
+	}
+
 	return nil
 }
 
@@ -106,28 +111,47 @@ func (w *Writer) detectFileMime(path string) (string, error) {
 	return kind.MIME.Value, nil
 }
 
-func (w *Writer) writeAttachment(multipartWriter *multipart.Writer, path string, data []byte) error {
+func (w *Writer) writeAttachment(target io.Writer, boundary string, path string, data []byte) error {
 	mimeType, err := w.detectFileMime(path)
 	if err != nil {
 		return fmt.Errorf("failed to detect file mime type: %w", err)
 	}
 
-	headers := textproto.MIMEHeader{
-		"Content-Type":              []string{mimeType},
-		"Content-Disposition":       []string{fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path))},
-		"Content-Transfer-Encoding": []string{"base64"},
+	// Write boundary
+	if _, err := target.Write([]byte(fmt.Sprintf("--%s\r\n", boundary))); err != nil {
+		return fmt.Errorf("failed to write boundary: %w", err)
 	}
 
-	part, err := multipartWriter.CreatePart(headers)
-	if err != nil {
-		return fmt.Errorf("failed to create attachment part: %w", err)
+	// Write headers with proper MIME folding
+	contentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path))
+	if err := w.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
+		return fmt.Errorf("failed to write Content-Disposition header: %w", err)
 	}
 
-	base64Encoder := base64.NewEncoder(base64.StdEncoding, part)
+	if err := w.writeFoldedHeader(target, "Content-Type", mimeType); err != nil {
+		return fmt.Errorf("failed to write Content-Type header: %w", err)
+	}
+
+	if err := w.writeFoldedHeader(target, "Content-Transfer-Encoding", "base64"); err != nil {
+		return fmt.Errorf("failed to write Content-Transfer-Encoding header: %w", err)
+	}
+
+	// Write blank line after headers
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write newline after attachment headers: %w", err)
+	}
+
+	// Write base64 encoded data
+	base64Encoder := base64.NewEncoder(base64.StdEncoding, target)
 	defer base64Encoder.Close()
 
 	if _, err = base64Encoder.Write(data); err != nil {
 		return fmt.Errorf("failed to write attachment data: %w", err)
+	}
+
+	// Ensure a blank line after the attachment content for proper MIME formatting
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write blank line after attachment: %w", err)
 	}
 
 	return nil
@@ -142,29 +166,86 @@ func (w *Writer) isHeaderInList(slice []string, item string) bool {
 	return false
 }
 
+// writeFoldedHeader writes a header line with proper MIME folding (max 76 characters per line)
+func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
+	headerLine := fmt.Sprintf("%s: %s\r\n", key, value)
+
+	// If the header line is within the 76 character limit, write it directly
+	if len(headerLine) <= 76 {
+		_, err := target.Write([]byte(headerLine))
+		return err
+	}
+
+	// Otherwise, fold the header: write the first part, then continue with space
+	firstLine := headerLine[:76]
+	if !strings.Contains(firstLine, "\r\n") {
+		// Find the last space before position 76 to break nicely
+		lastSpace := strings.LastIndex(headerLine[:76], " ")
+		if lastSpace > len(key)+2 { // Make sure we don't break in the header name
+			firstLine = headerLine[:lastSpace]
+		}
+	}
+
+	_, err := target.Write([]byte(firstLine + "\r\n"))
+	if err != nil {
+		return err
+	}
+
+	// Write continuation lines with leading space
+	remaining := headerLine[len(firstLine):]
+	for len(remaining) > 0 {
+		if len(remaining) <= 75 { // 75 because we add a space at the beginning
+			_, err = target.Write([]byte(" " + remaining))
+			return err
+		}
+
+		// Find break point for continuation
+		breakPoint := 74 // Leave room for space + potential line ending
+		if breakPoint > len(remaining) {
+			breakPoint = len(remaining)
+		}
+
+		lastSpace := strings.LastIndex(remaining[:breakPoint], " ")
+		if lastSpace > 0 {
+			breakPoint = lastSpace
+		}
+
+		line := " " + remaining[:breakPoint] + "\r\n"
+		_, err = target.Write([]byte(line))
+		if err != nil {
+			return err
+		}
+		remaining = remaining[breakPoint:]
+	}
+
+	return nil
+}
+
 func (w *Writer) Write(target io.Writer, data EML) error {
 	msg := &mail.Message{}
 	w.addStandardHeadersToMessage(msg, data)
 
 	orderedStandardHeaders := []string{"From", "Reply-To", "To", "Date", "Subject", "Content-Type"}
 
+	// Write standard headers with folding
 	for _, key := range orderedStandardHeaders {
 		if values, exists := msg.Header[key]; exists {
 			for _, value := range values {
-				if _, err := target.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value))); err != nil {
+				if err := w.writeFoldedHeader(target, key, value); err != nil {
 					return fmt.Errorf("failed to write header %s: %w", key, err)
 				}
 			}
 		}
 	}
 
+	// Write custom headers with folding
 	for key, values := range msg.Header {
 		if w.isHeaderInList(orderedStandardHeaders, key) {
 			continue
 		}
 
 		for _, value := range values {
-			if _, err := target.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value))); err != nil {
+			if err := w.writeFoldedHeader(target, key, value); err != nil {
 				return fmt.Errorf("failed to write custom header %s: %w", key, err)
 			}
 		}
@@ -197,13 +278,14 @@ func (w *Writer) Write(target io.Writer, data EML) error {
 			return fmt.Errorf("failed to read attachment: %w", err)
 		}
 
-		if err = w.writeAttachment(multipartWriter, attachment, attachmentData); err != nil {
+		if err = w.writeAttachment(target, data.MessageId, attachment, attachmentData); err != nil {
 			return err
 		}
 	}
 
-	if err := multipartWriter.Close(); err != nil {
-		return fmt.Errorf("failed to close multipart writer: %w", err)
+	// Write final boundary
+	if _, err := target.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", data.MessageId))); err != nil {
+		return fmt.Errorf("failed to write final boundary: %w", err)
 	}
 
 	return nil

@@ -73,8 +73,8 @@ func (of *OutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (strin
 		return "", err
 	}
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", of.tableName)
-	inParams, err := attributevalue.MarshalList([]any{id, status, map[string]any{"TTL": ttl}})
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", of.tableName)
+	inParams, err := attributevalue.MarshalList([]any{id, status, map[string]any{}, ttl})
 	if err != nil {
 		return "", err
 	}

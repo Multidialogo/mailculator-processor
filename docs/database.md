@@ -21,7 +21,12 @@ type Email struct {
 ```
 
 ### Time To Live (TTL)
-DynamoDB TTL è configurato per eliminare automaticamente i record obsoleti. L'attributo `TTL` deve contenere un timestamp Unix (epoch time) in secondi che indica quando il record deve essere eliminato. 
+DynamoDB TTL è configurato per eliminare automaticamente i record obsoleti. L'attributo `TTL` deve contenere un timestamp Unix (epoch time) in secondi che indica quando il record deve essere eliminato.
+
+**Posizionamento TTL**:
+- **Nuovi record**: TTL è posizionato alla radice del record DynamoDB
+- **Record legacy**: TTL può essere presente in `Attributes.TTL` per retrocompatibilità
+- **Logica di lettura**: Il sistema prima cerca TTL alla radice, poi in `Attributes.TTL` come fallback
 
 **Esempio**:
 ```go
@@ -43,17 +48,17 @@ ttl := time.Now().Add(7 * 24 * time.Hour).Unix()
 ### Struttura Dati
 Ogni email ha due tipi di record:
 1. **Record Meta**: `Status = "_META"` con `Attributes.Latest = "{stato_corrente}"`
-2. **Record Stato**: `Status = "{stato_corrente}"` con `Attributes = {"TTL": timestamp}`
+2. **Record Stato**: `Status = "{stato_corrente}"` con `TTL = timestamp` alla radice del record
 
 ### Transazione Update
 Ogni cambio di stato esegue una transazione con due statement:
 ```sql
 -- Update meta record
-UPDATE "table" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? 
+UPDATE "table" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=?
 WHERE Id=? AND Status=?
 
--- Insert new status record  
-INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}
+-- Insert new status record
+INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}
 ```
 
 ## Stati Disponibili

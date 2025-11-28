@@ -67,7 +67,7 @@ func NewOutbox(db *dynamodb.Client, tableName string) *Outbox {
 }
 
 func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, error) {
-	query := fmt.Sprintf("SELECT Id, Status, Attributes FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", o.tableName, statusIndex)
+	query := fmt.Sprintf("SELECT Id, Status, Attributes, TTL FROM \"%v\".\"%v\" WHERE Status=? AND Attributes.Latest =?", o.tableName, statusIndex)
 	params, _ := attributevalue.MarshalList([]any{StatusMeta, status})
 
 	var items []map[string]types.AttributeValue
@@ -168,14 +168,29 @@ func (o *Outbox) backoffDuration(attempt int) time.Duration {
 }
 
 func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, ttl *int64) error {
-	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
-	metaParams, _ := attributevalue.MarshalList([]any{
-		status,
-		time.Now().Format(time.RFC3339),
-		errorReason,
-		id,
-		StatusMeta,
-	})
+	var metaStmt string
+	var metaParams []types.AttributeValue
+
+	if ttl != nil {
+		metaStmt = fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=?, TTL=? WHERE Id=? AND Status=?", o.tableName)
+		metaParams, _ = attributevalue.MarshalList([]any{
+			status,
+			time.Now().Format(time.RFC3339),
+			errorReason,
+			*ttl,
+			id,
+			StatusMeta,
+		})
+	} else {
+		metaStmt = fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
+		metaParams, _ = attributevalue.MarshalList([]any{
+			status,
+			time.Now().Format(time.RFC3339),
+			errorReason,
+			id,
+			StatusMeta,
+		})
+	}
 
 	// Costruisci dinamicamente la query INSERT basata sulla presenza di TTL
 	var inStmt string
@@ -217,14 +232,29 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 }
 
 func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl *int64) error {
-	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.EMLFilePath=? WHERE Id=? AND Status=?", o.tableName)
-	metaParams, _ := attributevalue.MarshalList([]any{
-		StatusReady,
-		time.Now().Format(time.RFC3339),
-		emlFilePath,
-		id,
-		StatusMeta,
-	})
+	var metaStmt string
+	var metaParams []types.AttributeValue
+
+	if ttl != nil {
+		metaStmt = fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.EMLFilePath=?, TTL=? WHERE Id=? AND Status=?", o.tableName)
+		metaParams, _ = attributevalue.MarshalList([]any{
+			StatusReady,
+			time.Now().Format(time.RFC3339),
+			emlFilePath,
+			*ttl,
+			id,
+			StatusMeta,
+		})
+	} else {
+		metaStmt = fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.EMLFilePath=? WHERE Id=? AND Status=?", o.tableName)
+		metaParams, _ = attributevalue.MarshalList([]any{
+			StatusReady,
+			time.Now().Format(time.RFC3339),
+			emlFilePath,
+			id,
+			StatusMeta,
+		})
+	}
 
 	// Costruisci dinamicamente la query INSERT basata sulla presenza di TTL
 	var inStmt string

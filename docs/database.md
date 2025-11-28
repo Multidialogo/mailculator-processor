@@ -47,19 +47,21 @@ ttl := time.Now().Add(7 * 24 * time.Hour).Unix()
 
 ### Struttura Dati
 Ogni email ha due tipi di record:
-1. **Record Meta**: `Status = "_META"` con `Attributes.Latest = "{stato_corrente}"`
-2. **Record Stato**: `Status = "{stato_corrente}"` con `TTL = timestamp` alla radice del record
+1. **Record Meta**: `Status = "_META"` con `Attributes.Latest = "{stato_corrente}"` e `TTL = timestamp` alla radice (se presente)
+2. **Record Stato**: `Status = "{stato_corrente}"` con `TTL = timestamp` alla radice del record (se presente)
 
 ### Transazione Update
 Ogni cambio di stato esegue una transazione con due statement:
 ```sql
--- Update meta record
-UPDATE "table" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=?
+-- Update meta record (con TTL se presente)
+UPDATE "table" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=?, TTL=?
 WHERE Id=? AND Status=?
 
--- Insert new status record
+-- Insert new status record (con TTL se presente)
 INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}
 ```
+
+**Nota**: Il TTL viene sempre sincronizzato tra il record _META e i record di stato. Quando un TTL è presente, viene impostato sia alla radice del record _META che alla radice del nuovo record di stato.
 
 ## Stati Disponibili
 - `ACCEPTED` - Email accettato, in attesa di intake
@@ -78,7 +80,7 @@ INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}
 
 ### Query per Stato
 ```sql
-SELECT Id, Status, Attributes FROM "table"."StatusIndex" 
+SELECT Id, Status, Attributes, TTL FROM "table"."StatusIndex" 
 WHERE Status=? AND Attributes.Latest =?
 ```
 - **Parametri**: `[StatusMeta, target_status]`

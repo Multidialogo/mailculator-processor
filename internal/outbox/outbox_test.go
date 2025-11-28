@@ -134,8 +134,8 @@ func TestQuery_WhenTTLIsInvalidType_ShouldReturnError(t *testing.T) {
 			"Latest":      "READY",
 			"CreatedAt":   time.Now().Format(time.RFC3339),
 			"EMLFilePath": "/efs/email.eml",
-			"TTL":         "invalid-string-value",
 		},
+		"TTL": "invalid-string-value",
 	})
 
 	dbMock := &dynamodbMock{
@@ -148,6 +148,125 @@ func TestQuery_WhenTTLIsInvalidType_ShouldReturnError(t *testing.T) {
 
 	_, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "error unmarshalling TTL")
-	assert.Contains(t, err.Error(), "TTL must be an integer")
+	assert.Contains(t, err.Error(), "unmarshal failed")
+	assert.Contains(t, err.Error(), "cannot unmarshal string into Go value type int64")
+}
+
+func TestQuery_WhenTTLIsAtRoot_ShouldUseRootTTL(t *testing.T) {
+	t.Parallel()
+
+	expectedTTL := int64(1234567890)
+	record, _ := attributevalue.MarshalMap(map[string]any{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]any{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+		},
+		"TTL": expectedTTL,
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
+	}
+
+	sut := &Outbox{db: dbMock}
+
+	emails, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.NoError(t, err)
+	assert.Len(t, emails, 1)
+	assert.Equal(t, expectedTTL, emails[0].TTL)
+}
+
+func TestQuery_WhenTTLIsOnlyInAttributes_ShouldUseAttributesTTL(t *testing.T) {
+	t.Parallel()
+
+	expectedTTL := int64(9876543210)
+	record, _ := attributevalue.MarshalMap(map[string]any{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]any{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+			"TTL":         expectedTTL, // TTL nel vecchio formato (in Attributes)
+		},
+		// Nota: nessun TTL alla radice
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
+	}
+
+	sut := &Outbox{db: dbMock}
+
+	emails, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.NoError(t, err)
+	assert.Len(t, emails, 1)
+	assert.Equal(t, expectedTTL, emails[0].TTL)
+}
+
+func TestQuery_WhenTTLIsMissingEverywhere_ShouldReturnZeroTTL(t *testing.T) {
+	t.Parallel()
+
+	record, _ := attributevalue.MarshalMap(map[string]any{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]any{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+			// Nota: nessun TTL né in Attributes né alla radice
+		},
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
+	}
+
+	sut := &Outbox{db: dbMock}
+
+	emails, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.NoError(t, err)
+	assert.Len(t, emails, 1)
+	assert.Equal(t, int64(0), emails[0].TTL)
+}
+
+func TestQuery_WhenTTLIsAtRootAndInAttributes_ShouldPreferRootTTL(t *testing.T) {
+	t.Parallel()
+
+	rootTTL := int64(1111111111)
+	attributesTTL := int64(2222222222) // Questo dovrebbe essere ignorato
+
+	record, _ := attributevalue.MarshalMap(map[string]any{
+		"Id":     "12345",
+		"Status": "_META",
+		"Attributes": map[string]any{
+			"Latest":      "READY",
+			"CreatedAt":   time.Now().Format(time.RFC3339),
+			"EMLFilePath": "/efs/email.eml",
+			"TTL":         attributesTTL, // TTL nel vecchio formato
+		},
+		"TTL": rootTTL, // TTL nel nuovo formato - dovrebbe avere priorità
+	})
+
+	dbMock := &dynamodbMock{
+		statementOutput: &dynamodb.ExecuteStatementOutput{
+			Items: []map[string]types.AttributeValue{record},
+		},
+	}
+
+	sut := &Outbox{db: dbMock}
+
+	emails, err := sut.Query(context.TODO(), "ANY", 10)
+	assert.NoError(t, err)
+	assert.Len(t, emails, 1)
+	assert.Equal(t, rootTTL, emails[0].TTL) // Dovrebbe usare il TTL alla radice
 }

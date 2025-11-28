@@ -46,7 +46,7 @@ type Email struct {
 	PayloadFilePath string
 	UpdatedAt       string
 	Reason          string
-	TTL             int64
+	TTL             *int64
 }
 
 type dynamodbInterface interface {
@@ -167,7 +167,7 @@ func (o *Outbox) backoffDuration(attempt int) time.Duration {
 	return time.Duration(rand.Int63n(int64(max)))
 }
 
-func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, ttl int64) error {
+func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, ttl *int64) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=? WHERE Id=? AND Status=?", o.tableName)
 	metaParams, _ := attributevalue.MarshalList([]any{
 		status,
@@ -177,8 +177,17 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 		StatusMeta,
 	})
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
-	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}, ttl})
+	// Costruisci dinamicamente la query INSERT basata sulla presenza di TTL
+	var inStmt string
+	var inParams []types.AttributeValue
+
+	if ttl != nil {
+		inStmt = fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
+		inParams, _ = attributevalue.MarshalList([]any{id, status, map[string]any{}, *ttl})
+	} else {
+		inStmt = fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
+		inParams, _ = attributevalue.MarshalList([]any{id, status, map[string]any{}})
+	}
 
 	var err error
 	for attempt := range maxAttempts {
@@ -207,7 +216,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	return err
 }
 
-func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl int64) error {
+func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl *int64) error {
 	metaStmt := fmt.Sprintf("UPDATE \"%v\" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.EMLFilePath=? WHERE Id=? AND Status=?", o.tableName)
 	metaParams, _ := attributevalue.MarshalList([]any{
 		StatusReady,
@@ -217,8 +226,17 @@ func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl i
 		StatusMeta,
 	})
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
-	inParams, _ := attributevalue.MarshalList([]any{id, StatusReady, map[string]any{}, ttl})
+	// Costruisci dinamicamente la query INSERT basata sulla presenza di TTL
+	var inStmt string
+	var inParams []types.AttributeValue
+
+	if ttl != nil {
+		inStmt = fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
+		inParams, _ = attributevalue.MarshalList([]any{id, StatusReady, map[string]any{}, *ttl})
+	} else {
+		inStmt = fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
+		inParams, _ = attributevalue.MarshalList([]any{id, StatusReady, map[string]any{}})
+	}
 
 	var err error
 	for attempt := range maxAttempts {
@@ -274,21 +292,29 @@ func (m *emailMarshaller) unmarshalTTL(value any) (int64, error) {
 }
 
 // unmarshalTTLWithFallback cerca prima TTL alla radice, poi in Attributes.TTL per retrocompatibilità
-func (m *emailMarshaller) unmarshalTTLWithFallback(rootTTL *int64, attributes map[string]any) (int64, error) {
+func (m *emailMarshaller) unmarshalTTLWithFallback(rootTTL *int64, attributes map[string]any) (*int64, error) {
 	// Prima priorità: TTL alla radice (nuovi record)
 	if rootTTL != nil {
-		return m.unmarshalTTL(*rootTTL)
+		ttl, err := m.unmarshalTTL(*rootTTL)
+		if err != nil {
+			return nil, err
+		}
+		return &ttl, nil
 	}
 
 	// Seconda priorità: TTL in Attributes (vecchi record)
 	if attributes != nil {
 		if ttlValue, exists := attributes["TTL"]; exists {
-			return m.unmarshalTTL(ttlValue)
+			ttl, err := m.unmarshalTTL(ttlValue)
+			if err != nil {
+				return nil, err
+			}
+			return &ttl, nil
 		}
 	}
 
 	// Default: nessun TTL trovato
-	return 0, nil
+	return nil, nil
 }
 
 func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeValue) (emails []Email, err error) {

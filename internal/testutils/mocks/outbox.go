@@ -57,7 +57,7 @@ func (m *OutboxMock) Query(ctx context.Context, status string, limit int) ([]out
 	return []outbox.Email{m.email}, m.queryMethodError
 }
 
-func (m *OutboxMock) Update(ctx context.Context, id string, status string, errorReason string, ttl int64) error {
+func (m *OutboxMock) Update(ctx context.Context, id string, status string, errorReason string, ttl *int64) error {
 	m.updateMethodCall++
 	if m.updateMethodCall == m.updateMethodFailsCall {
 		return m.updateMethodError
@@ -65,7 +65,7 @@ func (m *OutboxMock) Update(ctx context.Context, id string, status string, error
 	return nil
 }
 
-func (m *OutboxMock) Ready(ctx context.Context, id string, emlFilePath string, ttl int64) error {
+func (m *OutboxMock) Ready(ctx context.Context, id string, emlFilePath string, ttl *int64) error {
 	m.updateMethodCall++
 	if m.updateMethodCall == m.updateMethodFailsCall {
 		return m.updateMethodError

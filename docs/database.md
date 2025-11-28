@@ -16,7 +16,7 @@ type Email struct {
     PayloadFilePath string  // Path del file .json contenente il payload per intake
     UpdatedAt       string  // Timestamp RFC3339 dell'ultimo aggiornamento
     Reason          string  // Motivo dell'ultimo stato
-    TTL             int64   // Timestamp Unix in secondi per DynamoDB TTL
+    TTL             *int64  // Timestamp Unix in secondi per DynamoDB TTL (nil se non presente)
 }
 ```
 
@@ -26,7 +26,7 @@ DynamoDB TTL è configurato per eliminare automaticamente i record obsoleti. L'a
 **Posizionamento TTL**:
 - **Nuovi record**: TTL è posizionato alla radice del record DynamoDB
 - **Record legacy**: TTL può essere presente in `Attributes.TTL` per retrocompatibilità
-- **Logica di lettura**: Il sistema prima cerca TTL alla radice, poi in `Attributes.TTL` come fallback
+- **Logica di lettura**: Il sistema prima cerca TTL alla radice, poi in `Attributes.TTL` come fallback. Restituisce `nil` se TTL non è presente da nessuna parte.
 
 **Esempio**:
 ```go

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -109,7 +110,7 @@ func TestUpdate_WhenDatabaseReturnNoError_ShouldReturnNoError(t *testing.T) {
 	dbMock := &dynamodbMock{transactionOutput: &dynamodb.ExecuteTransactionOutput{}}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "READY", "", 1234567890)
+	err := sut.Update(context.TODO(), "12345", "READY", "", aws.Int64(1234567890))
 	assert.NoError(t, err)
 }
 
@@ -120,7 +121,7 @@ func TestUpdate_WhenDatabaseReturnError_ShouldReturnSameError(t *testing.T) {
 	dbMock := &dynamodbMock{returnError: expectedError}
 	sut := &Outbox{db: dbMock}
 
-	err := sut.Update(context.TODO(), "12345", "READY", "", 1234567890)
+	err := sut.Update(context.TODO(), "12345", "READY", "", aws.Int64(1234567890))
 	assert.ErrorIs(t, expectedError, err)
 }
 
@@ -178,7 +179,8 @@ func TestQuery_WhenTTLIsAtRoot_ShouldUseRootTTL(t *testing.T) {
 	emails, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.NoError(t, err)
 	assert.Len(t, emails, 1)
-	assert.Equal(t, expectedTTL, emails[0].TTL)
+	assert.NotNil(t, emails[0].TTL)
+	assert.Equal(t, expectedTTL, *emails[0].TTL)
 }
 
 func TestQuery_WhenTTLIsOnlyInAttributes_ShouldUseAttributesTTL(t *testing.T) {
@@ -208,10 +210,11 @@ func TestQuery_WhenTTLIsOnlyInAttributes_ShouldUseAttributesTTL(t *testing.T) {
 	emails, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.NoError(t, err)
 	assert.Len(t, emails, 1)
-	assert.Equal(t, expectedTTL, emails[0].TTL)
+	assert.NotNil(t, emails[0].TTL)
+	assert.Equal(t, expectedTTL, *emails[0].TTL)
 }
 
-func TestQuery_WhenTTLIsMissingEverywhere_ShouldReturnZeroTTL(t *testing.T) {
+func TestQuery_WhenTTLIsMissingEverywhere_ShouldReturnNilTTL(t *testing.T) {
 	t.Parallel()
 
 	record, _ := attributevalue.MarshalMap(map[string]any{
@@ -236,7 +239,7 @@ func TestQuery_WhenTTLIsMissingEverywhere_ShouldReturnZeroTTL(t *testing.T) {
 	emails, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.NoError(t, err)
 	assert.Len(t, emails, 1)
-	assert.Equal(t, int64(0), emails[0].TTL)
+	assert.Nil(t, emails[0].TTL)
 }
 
 func TestQuery_WhenTTLIsAtRootAndInAttributes_ShouldPreferRootTTL(t *testing.T) {
@@ -268,5 +271,6 @@ func TestQuery_WhenTTLIsAtRootAndInAttributes_ShouldPreferRootTTL(t *testing.T) 
 	emails, err := sut.Query(context.TODO(), "ANY", 10)
 	assert.NoError(t, err)
 	assert.Len(t, emails, 1)
-	assert.Equal(t, rootTTL, emails[0].TTL) // Dovrebbe usare il TTL alla radice
+	assert.NotNil(t, emails[0].TTL)
+	assert.Equal(t, rootTTL, *emails[0].TTL) // Dovrebbe usare il TTL alla radice
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -79,7 +80,7 @@ func TestSuccessfulIntake(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 	)
 	
@@ -127,7 +128,7 @@ func TestIntakeUpdateError(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 	)
@@ -151,7 +152,7 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: "/nonexistent/file.json",
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 	)
 	
@@ -182,7 +183,7 @@ func TestIntakeInvalidJSON(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: tmpFile.Name(),
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 	)
 	
@@ -213,7 +214,7 @@ func TestIntakeValidationError(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 	)
 	
@@ -246,7 +247,7 @@ func TestIntakeStorageError(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             1234567890,
+			TTL:             aws.Int64(1234567890),
 		}),
 	)
 	

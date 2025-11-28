@@ -8,6 +8,7 @@ import (
 
 	"mailculator-processor/internal/testutils/facades"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +43,7 @@ func TestOutboxComponentWorkflow(t *testing.T) {
 	db := dynamodb.NewFromConfig(awsConfig)
 	sut := NewOutbox(db, outboxTableName)
 	of, err := facades.NewOutboxFacade(outboxTableName, StatusMeta)
-	sampleTtl := int64(1234567890)
+	sampleTtl := aws.Int64(1234567890)
 
 	fixtures = make([]string, 0)
 	defer deleteFixtures(t, of)

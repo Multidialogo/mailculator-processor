@@ -60,7 +60,7 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 	wg.Wait()
 }
 
-func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, emailId string, status string, errorReason string, ttl int64) {
+func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, emailId string, status string, errorReason string, ttl *int64) {
 	if err := p.outbox.Update(ctx, emailId, status, errorReason, ttl); err != nil {
 		msg := fmt.Sprintf("error updating status to %v, error: %v", status, err)
 		logger.Error(msg)

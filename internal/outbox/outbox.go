@@ -177,8 +177,8 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 		StatusMeta,
 	})
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
-	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{"TTL": ttl}})
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
+	inParams, _ := attributevalue.MarshalList([]any{id, status, map[string]any{}, ttl})
 
 	var err error
 	for attempt := range maxAttempts {
@@ -217,8 +217,8 @@ func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, ttl i
 		StatusMeta,
 	})
 
-	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?}", o.tableName)
-	inParams, _ := attributevalue.MarshalList([]any{id, StatusReady, map[string]any{"TTL": ttl}})
+	inStmt := fmt.Sprintf("INSERT INTO \"%v\" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}", o.tableName)
+	inParams, _ := attributevalue.MarshalList([]any{id, StatusReady, map[string]any{}, ttl})
 
 	var err error
 	for attempt := range maxAttempts {
@@ -251,6 +251,7 @@ type emailItemRow struct {
 	Id         string         `dynamodbav:"Id"`
 	Status     string         `dynamodbav:"Status"`
 	Attributes map[string]any `dynamodbav:"Attributes"`
+	TTL        *int64         `dynamodbav:"TTL,omitempty"`
 }
 
 type emailMarshaller struct{}
@@ -272,6 +273,24 @@ func (m *emailMarshaller) unmarshalTTL(value any) (int64, error) {
 	}
 }
 
+// unmarshalTTLWithFallback cerca prima TTL alla radice, poi in Attributes.TTL per retrocompatibilità
+func (m *emailMarshaller) unmarshalTTLWithFallback(rootTTL *int64, attributes map[string]any) (int64, error) {
+	// Prima priorità: TTL alla radice (nuovi record)
+	if rootTTL != nil {
+		return m.unmarshalTTL(*rootTTL)
+	}
+
+	// Seconda priorità: TTL in Attributes (vecchi record)
+	if attributes != nil {
+		if ttlValue, exists := attributes["TTL"]; exists {
+			return m.unmarshalTTL(ttlValue)
+		}
+	}
+
+	// Default: nessun TTL trovato
+	return 0, nil
+}
+
 func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeValue) (emails []Email, err error) {
 	var items []emailItemRow
 	err = attributevalue.UnmarshalListOfMaps(attrsList, &items)
@@ -280,7 +299,7 @@ func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeVa
 	}
 
 	for _, item := range items {
-		ttl, err := m.unmarshalTTL(item.Attributes["TTL"])
+		ttl, err := m.unmarshalTTLWithFallback(item.TTL, item.Attributes)
 		if err != nil {
 			return []Email{}, fmt.Errorf("error unmarshalling TTL for email %s: %w", item.Id, err)
 		}

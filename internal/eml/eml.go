@@ -61,10 +61,14 @@ func (w *Writer) writePart(multipartWriter *multipart.Writer, contentType, chars
 	}
 
 	writer := quotedprintable.NewWriter(part)
-	defer writer.Close()
 
 	if _, err = writer.Write([]byte(body)); err != nil {
 		return fmt.Errorf("failed to write part body: %w", err)
+	}
+
+	// Close the writer explicitly to flush any buffered data
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to close quoted-printable writer: %w", err)
 	}
 
 	// Ensure a blank line after the part content for proper MIME formatting
@@ -111,6 +115,51 @@ func (w *Writer) detectFileMime(path string) (string, error) {
 	return kind.MIME.Value, nil
 }
 
+// lineBreakWriter wraps an io.Writer and inserts line breaks every N characters
+// This is needed for RFC 2045 compliance (base64 lines must be max 76 chars)
+type lineBreakWriter struct {
+	w           io.Writer
+	lineLength  int
+	currentLine int
+}
+
+func newLineBreakWriter(w io.Writer, lineLength int) *lineBreakWriter {
+	return &lineBreakWriter{
+		w:          w,
+		lineLength: lineLength,
+	}
+}
+
+func (lbw *lineBreakWriter) Write(p []byte) (n int, err error) {
+	for len(p) > 0 {
+		// Check if we need to start a new line
+		if lbw.currentLine >= lbw.lineLength {
+			if _, err := lbw.w.Write([]byte("\r\n")); err != nil {
+				return n, err
+			}
+			lbw.currentLine = 0
+		}
+
+		// Calculate how much we can write on this line
+		remaining := lbw.lineLength - lbw.currentLine
+		toWrite := remaining
+		if toWrite > len(p) {
+			toWrite = len(p)
+		}
+
+		// Write the data
+		written, err := lbw.w.Write(p[:toWrite])
+		n += written
+		lbw.currentLine += written
+		p = p[toWrite:]
+
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}
+
 func (w *Writer) writeAttachment(target io.Writer, boundary string, path string, data []byte) error {
 	mimeType, err := w.detectFileMime(path)
 	if err != nil {
@@ -141,12 +190,17 @@ func (w *Writer) writeAttachment(target io.Writer, boundary string, path string,
 		return fmt.Errorf("failed to write newline after attachment headers: %w", err)
 	}
 
-	// Write base64 encoded data
-	base64Encoder := base64.NewEncoder(base64.StdEncoding, target)
-	defer base64Encoder.Close()
+	// Write base64 encoded data with line breaks every 76 characters (RFC 2045)
+	lineBreaker := newLineBreakWriter(target, 76)
+	base64Encoder := base64.NewEncoder(base64.StdEncoding, lineBreaker)
 
 	if _, err = base64Encoder.Write(data); err != nil {
 		return fmt.Errorf("failed to write attachment data: %w", err)
+	}
+
+	// Close the encoder explicitly to flush any buffered data
+	if err := base64Encoder.Close(); err != nil {
+		return fmt.Errorf("failed to close base64 encoder: %w", err)
 	}
 
 	// Ensure a blank line after the attachment content for proper MIME formatting

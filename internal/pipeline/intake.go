@@ -75,7 +75,7 @@ func (p *IntakePipeline) Process(ctx context.Context) {
 				subLogger.Error(fmt.Sprintf("failed to create and store EML, error: %v", err))
 				p.handle(context.Background(), subLogger, e.Id, outbox.StatusInvalid, err.Error(), e.TTL)
 			} else {
-				if err := p.outbox.Ready(ctx, e.Id, emlPath, e.TTL); err != nil {
+				if err := p.outbox.Ready(context.Background(), e.Id, emlPath, e.TTL); err != nil {
 					subLogger.Error(fmt.Sprintf("failed to update status to READY: %v", err))
 					p.handle(context.Background(), subLogger, e.Id, outbox.StatusInvalid, err.Error(), e.TTL)
 				} else {

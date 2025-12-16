@@ -69,6 +69,18 @@ func (cp *configProviderMock) GetAttachmentsBasePath() string {
 	return "/base/attachments/path/"
 }
 
+func (cp *configProviderMock) GetMySQLDSN() string {
+	return ""
+}
+
+func (cp *configProviderMock) DynamoDBPipelinesEnabled() bool {
+	return true
+}
+
+func (cp *configProviderMock) MySQLPipelinesEnabled() bool {
+	return false
+}
+
 func TestAppInstance(t *testing.T) {
 	app, errNew := New(newConfigProviderMock())
 	require.NoError(t, errNew)

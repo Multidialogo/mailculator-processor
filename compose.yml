@@ -25,6 +25,13 @@ services:
       ATTACHMENTS_BASE_PATH: 'testdata/attachments'
       EMAIL_OUTBOX_TABLE: 'Outbox'
       EML_STORAGE_PATH: 'testdata/.out/eml'
+      MYSQL_HOST: '127.0.0.1'
+      MYSQL_PORT: '3306'
+      MYSQL_USER: 'root'
+      MYSQL_PASSWORD: 'test'
+      MYSQL_DATABASE: 'mailculator_test'
+      DYNAMODB_PIPELINES_ENABLED: 'true'
+      MYSQL_PIPELINES_ENABLED: 'true'
     command: >
       sh -c "go mod tidy &&
              ./scripts/coverage.sh unit &&
@@ -153,3 +160,64 @@ services:
       AWS_SECRET_ACCESS_KEY: 'local'
     networks:
       - mailculator-processor-deployments-net
+
+  mysql: &mysql-base
+    profiles:
+      - 'none'
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: 'test'
+      MARIADB_DATABASE: 'mailculator_test'
+    volumes:
+      - './docker/mysql/migrations:/docker-entrypoint-initdb.d/migrations:ro'
+      - './docker/mysql/init.sh:/docker-entrypoint-initdb.d/zzz-init.sh:ro'
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /var/lib/mysql/zz-finish && mysqladmin ping -h localhost -ptest']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    ports:
+      - '127.0.0.1:3306:3306'
+    networks:
+      - mailculator-processor-deployments-net
+
+  mysql-test:
+    <<: *mysql-base
+    container_name: mailculator_processor_mysql_test
+    profiles:
+      - 'test-deps'
+
+  mysql-devcontainer:
+    <<: *mysql-base
+    container_name: mailculator_processor_mysql_devcontainer
+    profiles:
+      - 'devcontainer-deps'
+
+  wait-for-mysql-test:
+    container_name: mailculator_processor_wait_for_mysql_test
+    profiles:
+      - 'test-deps'
+    image: golang:1.25-alpine
+    command: ['echo', 'Service mysql-test is ready']
+    networks:
+      - mailculator-processor-deployments-net
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  phpmyadmin:
+    container_name: mailculator_processor_phpmyadmin_devcontainer
+    profiles:
+      - 'devcontainer-deps'
+    image: phpmyadmin:latest
+    ports:
+      - '127.0.0.1:9003:80'
+    environment:
+      PMA_HOST: 'mysql-devcontainer'
+      PMA_USER: 'root'
+      PMA_PASSWORD: 'test'
+    networks:
+      - mailculator-processor-deployments-net
+    depends_on:
+      mysql-devcontainer:
+        condition: service_healthy

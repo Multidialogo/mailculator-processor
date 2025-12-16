@@ -47,6 +47,7 @@ type Email struct {
 	UpdatedAt       string
 	Reason          string
 	TTL             *int64
+	Version         int
 }
 
 type dynamodbInterface interface {
@@ -368,6 +369,7 @@ func (m *emailMarshaller) UnmarshalList(attrsList []map[string]types.AttributeVa
 			UpdatedAt:       fmt.Sprint(item.Attributes["UpdatedAt"]),
 			Reason:          fmt.Sprint(item.Attributes["Reason"]),
 			TTL:             ttl,
+			Version:         0, // DynamoDB doesn't use version-based locking
 		})
 	}
 

@@ -19,6 +19,32 @@ Il sistema effettua retry automatico per le seguenti eccezioni DynamoDB:
 - **Formula**: Durata casuale tra 0 e min(2^attempt * base_delay, max_delay)
 
 
+## Retry MySQL
+
+### Condizioni di Retry
+Il sistema effettua retry automatico per i seguenti errori MySQL:
+- `1205` - Lock wait timeout exceeded
+- `1213` - Deadlock found when trying to get lock
+- `1040` - Too many connections
+- `1203` - User already has more than max_user_connections active connections
+- `driver.ErrBadConn` - Connessione al database persa
+
+### Errori NON Soggetti a Retry
+- `ErrLockNotAcquired` - Conflitto di lock ottimistico (il record è stato modificato da un altro processo)
+
+### Backoff Strategy
+- **Max Attempts**: 8 tentativi
+- **Base Delay**: 30 millisecondi
+- **Max Delay**: 1 secondo
+- **Formula**: Durata casuale tra 0 e min(2^attempt * base_delay, max_delay)
+
+### Transazioni
+Le operazioni MySQL (Update, Ready, Create) sono eseguite in transazione:
+- In caso di errore, viene eseguito automaticamente il rollback
+- In caso di successo, viene eseguito il commit
+- Gli errori transitori sono gestiti con retry (la transazione viene ritentata dall'inizio)
+
+
 ## Retry Callback HTTP
 
 ### Condizioni di Retry
@@ -43,6 +69,7 @@ Quando il callback HTTP fallisce dopo tutti i retry:
 Quando non riesce ad acquisire il lock di processamento:
 - Operazione saltata
 - Log warning: "failed to acquire processing lock"
+- **Nessun retry**: `ErrLockNotAcquired` indica che un altro worker sta già processando il record
 
 ## Context Cancellation
 Tutti i retry rispettano il context cancellation:

@@ -16,11 +16,24 @@ health-check:
   server:
     port: 8080
 
+mysql:
+  host: "${MYSQL_HOST}"
+  port: ${MYSQL_PORT}
+  user: "${MYSQL_USER}"
+  password: "${MYSQL_PASSWORD}"
+  database: "${MYSQL_DATABASE}"
+
 outbox:
   table-name: "${EMAIL_OUTBOX_TABLE}"
 
 pipeline:
   interval: ${PIPELINE_INTERVAL}
+
+pipelines:
+  dynamodb:
+    enabled: ${DYNAMODB_PIPELINES_ENABLED}
+  mysql:
+    enabled: false
 
 smtp:
   host: "${SMTP_HOST}"

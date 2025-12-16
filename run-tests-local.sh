@@ -21,6 +21,13 @@ export PIPELINE_CALLBACK_URL=http://127.0.0.1:8080
 export ATTACHMENTS_BASE_PATH=testdata/attachments
 export EMAIL_OUTBOX_TABLE=Outbox
 export EML_STORAGE_PATH=testdata/.out/eml
+export MYSQL_HOST=127.0.0.1
+export MYSQL_PORT=3306
+export MYSQL_USER=root
+export MYSQL_PASSWORD=test
+export MYSQL_DATABASE=mailculator_test
+export DYNAMODB_PIPELINES_ENABLED=true
+export MYSQL_PIPELINES_ENABLED=true
 
 if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --build --force-recreate; then
   echo "Could not start test dependencies"

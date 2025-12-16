@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS email_statuses (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email_id CHAR(36) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_email_id (email_id),
+    FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

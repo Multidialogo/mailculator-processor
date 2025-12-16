@@ -33,7 +33,7 @@ pipelines:
   dynamodb:
     enabled: ${DYNAMODB_PIPELINES_ENABLED}
   mysql:
-    enabled: false
+    enabled: ${MYSQL_PIPELINES_ENABLED}
 
 smtp:
   host: "${SMTP_HOST}"

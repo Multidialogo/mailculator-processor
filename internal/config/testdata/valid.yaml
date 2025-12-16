@@ -13,11 +13,24 @@ health-check:
   server:
     port: 8080
 
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "test"
+  database: "mailculator_test"
+
 outbox:
   table-name: "Outbox"
 
 pipeline:
   interval: 3
+
+pipelines:
+  dynamodb:
+    enabled: true
+  mysql:
+    enabled: true
 
 smtp:
   host: dummy-host

@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS emails (
+    id CHAR(36) PRIMARY KEY,
+    status ENUM(
+        'ACCEPTED','INTAKING','READY','PROCESSING',
+        'SENT','FAILED','INVALID',
+        'CALLING-SENT-CALLBACK','CALLING-FAILED-CALLBACK',
+        'SENT-ACKNOWLEDGED','FAILED-ACKNOWLEDGED'
+    ) NOT NULL,
+    eml_file_path VARCHAR(500),
+    payload_file_path VARCHAR(500),
+    reason TEXT,
+    version INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_status (status),
+    INDEX idx_status_updated (status, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -3,11 +3,12 @@ package config
 import (
 	"context"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -61,14 +62,33 @@ type EmlStorageConfig struct {
 	Path string `yaml:"path" validate:"required"`
 }
 
+type MySQLConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+}
+
+type PipelineToggle struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type PipelinesConfig struct {
+	DynamoDB PipelineToggle `yaml:"dynamodb"`
+	MySQL    PipelineToggle `yaml:"mysql"`
+}
+
 type Config struct {
 	Attachments AttachmentsConfig `yaml:"attachments,flow" validate:"required"`
 	Aws         AwsConfig         `yaml:"aws,flow"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
 	EmlStorage  EmlStorageConfig  `yaml:"eml-storage,flow" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
+	MySQL       MySQLConfig       `yaml:"mysql,flow"`
 	Outbox      OutboxConfig      `yaml:"outbox,flow" validate:"required"`
 	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
+	Pipelines   PipelinesConfig   `yaml:"pipelines,flow"`
 	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
 }
 
@@ -156,4 +176,25 @@ func (c *Config) GetEmlStoragePath() string {
 
 func (c *Config) GetAttachmentsBasePath() string {
 	return c.Attachments.BasePath
+}
+
+func (c *Config) GetMySQLConfig() MySQLConfig {
+	return c.MySQL
+}
+
+func (c *Config) GetMySQLDSN() string {
+	cfg := c.MySQL
+	if cfg.Host == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
+}
+
+func (c *Config) DynamoDBPipelinesEnabled() bool {
+	return c.Pipelines.DynamoDB.Enabled
+}
+
+func (c *Config) MySQLPipelinesEnabled() bool {
+	return c.Pipelines.MySQL.Enabled
 }

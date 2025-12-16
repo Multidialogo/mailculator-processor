@@ -386,6 +386,21 @@ class TaskDefinitionStack(Stack):
             value=ses_smtp_credentials_secret_name
         )
 
+        container.add_environment(
+            name='DYNAMODB_PIPELINES_ENABLED',
+            value='true'
+        )
+
+        container.add_environment(
+            name='MYSQL_PIPELINES_ENABLED',
+            value='false'
+        )
+
+        container.add_environment(
+            name='SMTP_ALLOW_INSECURE_TLS', 
+            value='false'
+        )
+
         ssm.StringParameter(
             scope=self,
             id='temporary-task-definition-arn',

@@ -103,6 +103,8 @@ jobs:
       SES_SMTP_CREDENTIALS_SECRET_NAME: ${{ env.SES_SMTP_CREDENTIALS_SECRET_NAME }}
       SMTP_USER: ${{ env.SMTP_USER }}
       SMTP_PASSWORD: ${{ env.SMTP_PASSWORD }}
+      IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      IMAGE_NAME: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
 
   build-image:
     env:

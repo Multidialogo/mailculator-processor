@@ -18,13 +18,31 @@ env:
   SERVICE_NAME: multicarrier-email-daemon
   ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   MC_EMAIL_EFS_FOLDER_NAME: ${{ vars.MC_EMAIL_EFS_FOLDER_NAME }}
-  MD_REST_EFS_FOLDER_NAME: ${{ vars.MD_REST_EFS_FOLDER_NAME }}
   SERVICE_CONTAINER_PORT: ${{ vars.SERVICE_CONTAINER_PORT }}
   SERVICE_HOST_PORT: ${{ vars.SERVICE_HOST_PORT }}
   SMTP_SENDER: ${{ secrets.SMTP_SENDER }}
 
 jobs:
-  build:
+
+  fetch-ecr-password:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: get-ecr-pw
+        run: |
+          echo "ECR_PW=$(aws ecr get-login-password --region ${{ env.AWS_REGION }} --output text)" >> "$GITHUB_OUTPUT"
+    outputs:
+      ECR_PW: ${{ steps.get-ecr-pw.outputs.ecr_pw }}
+
+  set-environment-variables:
     runs-on: ubuntu-latest
     steps:
       - name: Select Environment
@@ -38,16 +56,15 @@ jobs:
             echo "MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.PROD_MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "MC_EML_EFS_ID_PARAMETER_NAME=${{ vars.PROD_MC_EML_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "REPOSITORY_NAME_PARAMETER_NAME=${{ vars.PROD_REPOSITORY_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_EFS_ID_PARAMETER_NAME=${{ vars.PROD_MD_REST_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.PROD_MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME=${{ vars.PROD_MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_EFS_ID_PARAMETER_NAME: ${{ vars.PROD_MD_REST_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_ACCESS_POINT_ID_PARAMETER_NAME: ${{ env.PROD_MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ env.PROD_MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.PROD_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.PROD_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.PROD_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.PROD_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
             echo "SMTP_USER=${{ secrets.PROD_SMTP_USER }}" >> $GITHUB_ENV
             echo "SMTP_PASSWORD=${{ secrets.PROD_SMTP_PASSWORD }}" >> $GITHUB_ENV
-            echo "DD_API_KEY_SECRET_NAME=${{ secrets.PROD_DD_API_KEY_SECRET_NAME }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
             echo "ENVIRONMENT=stage" >> $GITHUB_ENV
             echo "SERVICE_CPU=${{ vars.STAGE_SERVICE_CPU }}" >> $GITHUB_ENV
@@ -57,59 +74,136 @@ jobs:
             echo "MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.STAGE_MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "MC_EML_EFS_ID_PARAMETER_NAME=${{ vars.STAGE_MC_EML_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "REPOSITORY_NAME_PARAMETER_NAME=${{ vars.STAGE_REPOSITORY_NAME_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_EFS_ID_PARAMETER_NAME=${{ vars.STAGE_MD_REST_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_ACCESS_POINT_ID_PARAMETER_NAME=${{ vars.STAGE_MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
-            echo "MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME=${{ vars.STAGE_MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_EFS_ID_PARAMETER_NAME: ${{ vars.STAGE_MD_REST_EFS_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_ACCESS_POINT_ID_PARAMETER_NAME: ${{ env.STAGE_MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}" >> $GITHUB_ENV
+            echo "MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ env.STAGE_MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.STAGE_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.STAGE_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.STAGE_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.STAGE_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
             echo "SMTP_USER=${{ secrets.STAGE_SMTP_USER }}" >> $GITHUB_ENV
             echo "SMTP_PASSWORD=${{ secrets.STAGE_SMTP_PASSWORD }}" >> $GITHUB_ENV
-            echo "DD_API_KEY_SECRET_NAME=${{ secrets.STAGE_DD_API_KEY_SECRET_NAME }}" >> $GITHUB_ENV
           fi
+          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+    outputs:
+      ENVIRONMENT: ${{ env.ENVIRONMENT }}
+      SERVICE_CPU: ${{ env.SERVICE_CPU }}
+      SERVICE_MEMORY: ${{ env.SERVICE_MEMORY }}
+      OUTBOX_TABLE_NAME_PARAMETER_NAME: ${{ env.OUTBOX_TABLE_NAME_PARAMETER_NAME }}
+      MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ env.MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME }}
+      MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME: ${{ env.MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}
+      MC_EML_EFS_ID_PARAMETER_NAME: ${{ env.MC_EML_EFS_ID_PARAMETER_NAME }}
+      REPOSITORY_NAME_PARAMETER_NAME: ${{ env.REPOSITORY_NAME_PARAMETER_NAME }}
+      MD_REST_EFS_ID_PARAMETER_NAME: ${{ env.MD_REST_EFS_ID_PARAMETER_NAME }}
+      MD_REST_ACCESS_POINT_ID_PARAMETER_NAME: ${{ env.MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}
+      MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ env.MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}
+      TASK_DEFINITION_ARN_PARAMETER_NAME: ${{ env.TASK_DEFINITION_ARN_PARAMETER_NAME }}
+      TMP_TASK_DEFINITION_ARN_PARAMETER_NAME: ${{ env.TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}
+      CALLBACK_ENDPOINT_PARAMETER_NAME: ${{ env.CALLBACK_ENDPOINT_PARAMETER_NAME }}
+      SES_SMTP_CREDENTIALS_SECRET_NAME: ${{ env.SES_SMTP_CREDENTIALS_SECRET_NAME }}
+      SMTP_USER: ${{ env.SMTP_USER }}
+      SMTP_PASSWORD: ${{ env.SMTP_PASSWORD }}
 
-      # Step 1: Checkout the repository
+  build-image:
+    env:
+      IMAGE_TAG: ${{ needs.set-environment-variables.outputs.IMAGE_TAG }}
+      IMAGE_NAME: ${{ needs.set-environment-variables.outputs.IMAGE_NAME }}
+    runs-on: ubuntu-latest
+    needs:
+      - set-environment-variables
+    steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Step 2: Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # Step 3: Login to ECR registry
       - name: Login ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Step 4: Build & push image
       - name: Image build
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_NAME: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: |
           docker build -t "$IMAGE_NAME:latest" -f Dockerfile .
           docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:latest
-          docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA
+          docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
           docker push $ECR_REGISTRY/$IMAGE_NAME --all-tags
-          echo "image=$ECR_REGISTRY/$IMAGE_NAME:$GITHUB_SHA" >> $GITHUB_OUTPUT
-          echo "image-tag=$GITHUB_SHA" >> $GITHUB_OUTPUT
 
-      # Step 5: Deploy updated task definition stack
-      - name: Deploy CDK Stack
-        continue-on-error: false
-        uses: arnaskro/aws-cdk-v2-github-actions@v2.3.0
+  deploy-cdk:
+    env:
+      ENVIRONMENT: ${{ needs.set-environment-variables.outputs.ENVIRONMENT }}
+      IMAGE_NAME: ${{ needs.set-environment-variables.outputs.IMAGE_NAME }}
+      IMAGE_TAG: ${{ needs.set-environment-variables.outputs.IMAGE_TAG }}
+      TMP_TASK_DEFINITION_ARN_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}
+      TASK_DEFINITION_ARN_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.TASK_DEFINITION_ARN_PARAMETER_NAME }}
+      SERVICE_CPU: ${{ needs.set-environment-variables.outputs.SERVICE_CPU }}
+      SERVICE_MEMORY: ${{ needs.set-environment-variables.outputs.SERVICE_MEMORY }}
+      OUTBOX_TABLE_NAME_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.OUTBOX_TABLE_NAME_PARAMETER_NAME }}
+      MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME }}
+      MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME }}
+      MC_EML_EFS_ID_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MC_EML_EFS_ID_PARAMETER_NAME }}
+      REPOSITORY_NAME_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.REPOSITORY_NAME_PARAMETER_NAME }}
+      MD_REST_EFS_ID_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MD_REST_EFS_ID_PARAMETER_NAME }}
+      MD_REST_ACCESS_POINT_ID_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MD_REST_ACCESS_POINT_ID_PARAMETER_NAME }}
+      MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}
+      CALLBACK_ENDPOINT_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.CALLBACK_ENDPOINT_PARAMETER_NAME }}
+      SES_SMTP_CREDENTIALS_SECRET_NAME: ${{ needs.set-environment-variables.outputs.SES_SMTP_CREDENTIALS_SECRET_NAME }}
+      SMTP_USER: ${{ needs.set-environment-variables.outputs.SMTP_USER }}
+      SMTP_PASSWORD: ${{ needs.set-environment-variables.outputs.SMTP_PASSWORD }}
+    runs-on: ubuntu-latest
+    needs:
+      - fetch-ecr-password
+      - set-environment-variables
+      - build-image
+    container:
+      image: 823598220965.dkr.ecr.eu-west-1.amazonaws.com/alpine-cdk-runner:0ce104344ee2d098f181b1d785bfa55fa68b6e9f
+      credentials:
+        username: AWS
+        password: ${{ needs.fetch-ecr-password.outputs.ECR_PW }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          cdk_subcommand: 'deploy'
-          cdk_args: '-c environment=${{ env.ENVIRONMENT }} -c image_tag=${{ steps.build-image.outputs.image-tag }} --require-approval never'
-          actions_comment: false
-          working_dir: cdk
+          role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      # Step 6: Retrieve updated temporary task definition arn
+      - name: Inject cross repo shared token
+        working-directory: cdk
+        env:
+          SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
+        run: |
+          mv requirements.txt temp_requirements.txt
+          sed -e "s/__SHARED_TOKEN__/${{ secrets.SHARED_TOKEN }}/g" temp_requirements.txt > requirements.txt
+          cat requirements.txt
+
+      - name: Set CDK environment variables
+        run: |
+          echo "CDK_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          echo "CDK_DEFAULT_REGION=${{ vars.AWS_REGION }}" >> $GITHUB_ENV
+
+      - name: Deploy CDK Stack
+        working-directory: cdk
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install -r requirements.txt
+          cdk deploy -c environment=${{ env.ENVIRONMENT }} \
+          -c image_tag=${{ env.IMAGE_TAG }} \
+          -c dd_api_key_secret_name=${{ ( env.ENVIRONMENT == 'prod' ) && secrets.PROD_DD_API_KEY_SECRET_NAME || secrets.STAGE_DD_API_KEY_SECRET_NAME }} \
+          --require-approval never \
+          --all
+
       - name: Retrieve image updated task definition
         continue-on-error: false
         id: get-tmp-task-definition
@@ -117,7 +211,6 @@ jobs:
           TMP_TASK_DEFINITION_ARN=$(aws ssm get-parameter --name ${{ env.TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }} --query Parameter.Value --output text)
           echo "task-definition-arn=$TMP_TASK_DEFINITION_ARN" >> $GITHUB_OUTPUT
 
-      # Step 7: Deploy new task definition and wait for service to be stable
       - name: Deploy task definition
         id: task-definition-deploy
         run: |
@@ -129,9 +222,8 @@ jobs:
           --cluster ${{ env.ENVIRONMENT }} \
           --services ${{ env.SERVICE_NAME }}
 
-      # Step 8a: Update task definition ssm parameter if the deployment succeeds
       - name: Update the task definition ssm parameter
-#        if: ${{ steps.task-definition-deploy.outcome == 'success' }}
+        if: ${{ steps.task-definition-deploy.outcome == 'success' }}
         continue-on-error: false
         run: |
           aws ssm put-parameter \
@@ -140,7 +232,6 @@ jobs:
           --type String \
           --overwrite
 
-      # Step 8b: Deregister the task definition if the deployment fails
       - name: Delete task definition if deploy fails
         if: ${{ steps.task-definition-deploy.outcome == 'failure' }}
         run: |

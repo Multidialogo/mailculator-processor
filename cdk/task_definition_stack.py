@@ -25,6 +25,7 @@ class TaskDefinitionStack(Stack):
             id: str,
             env_parameters: dict,
             image_tag: str,
+            dd_api_key_secret_name: str,
             **kwargs
     ) -> None:
         super().__init__(
@@ -56,7 +57,6 @@ class TaskDefinitionStack(Stack):
         smtp_user = env_parameters['SMTP_USER']
         smtp_password = env_parameters['SMTP_PASSWORD']
         smtp_sender = env_parameters['SMTP_SENDER']
-        dd_api_key_secret_name = env_parameters['DD_API_KEY_SECRET_NAME']
 
         task_definition_family = f'{selected_environment}-{service_name}'
 
@@ -65,12 +65,21 @@ class TaskDefinitionStack(Stack):
             parameter_name=md_rest_access_point_arn_parameter_name
         )
 
+        task_execution_role = iam.Role(
+            scope=self,
+            id='execution-role',
+            assumed_by=iam.ServicePrincipal(
+                'ecs-tasks.amazonaws.com'
+            )
+        )
+
         task_definition = ecs.FargateTaskDefinition(
             scope=self,
             id=f'{service_name}-task-definition',
             cpu=int(service_cpu),
             family=task_definition_family,
-            memory_limit_mib=int(service_memory)
+            memory_limit_mib=int(service_memory),
+            execution_role=task_execution_role
         )
 
         task_definition.apply_removal_policy(
@@ -150,17 +159,6 @@ class TaskDefinitionStack(Stack):
             )
         )
 
-        task_definition.add_to_execution_role_policy(
-            statement=iam.PolicyStatement(
-                actions=[
-                    'secretsmanager:GetSecretValue'
-                ],
-                resources=[
-                    f'arn:aws:secretsmanager:{self.region}:{self.account}:secret:{dd_api_key_secret_name}-*'
-                ]
-            )
-        )
-
         log_group_retainment = RemovalPolicy.RETAIN if selected_environment == 'prod' else RemovalPolicy.DESTROY
 
         log_group = logs.LogGroup(
@@ -235,7 +233,7 @@ class TaskDefinitionStack(Stack):
             ecs.MountPoint(
                 container_path=mc_email_efs_folder_name,
                 source_volume=MC_VOLUME_NAME,
-                read_only=False
+                read_only=True
             )
         )
 
@@ -252,6 +250,7 @@ class TaskDefinitionStack(Stack):
             id='dd-api-key-secret',
             secret_name=dd_api_key_secret_name,
         )
+        dd_api_key_secret.grant_read(task_execution_role)
 
         datadog_container = task_definition.add_container(
             id='datadog-container',
@@ -333,7 +332,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='EML_STORAGE_PATH',
-            value=mc_email_efs_folder_name + "/eml"
+            value=mc_email_efs_folder_name + "/emls"
         )
 
         container.add_environment(
@@ -384,21 +383,6 @@ class TaskDefinitionStack(Stack):
         container.add_environment(
             name='SMTP_CREDENTIALS_SECRET_NAME',
             value=ses_smtp_credentials_secret_name
-        )
-
-        container.add_environment(
-            name='DYNAMODB_PIPELINES_ENABLED',
-            value='true'
-        )
-
-        container.add_environment(
-            name='MYSQL_PIPELINES_ENABLED',
-            value='false'
-        )
-
-        container.add_environment(
-            name='SMTP_ALLOW_INSECURE_TLS', 
-            value='false'
         )
 
         ssm.StringParameter(

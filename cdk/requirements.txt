@@ -1,2 +1,3 @@
 aws-cdk-lib
 cdk-nag
+multidialogo_cdk_shared @ git+https://__SHARED_TOKEN__@github.com/Multidialogo/multidialogo-cdk-shared.git@main

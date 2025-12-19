@@ -65,8 +65,6 @@ jobs:
             echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.PROD_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.PROD_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.PROD_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
-            echo "SMTP_USER=${{ secrets.PROD_SMTP_USER }}" >> $GITHUB_ENV
-            echo "SMTP_PASSWORD=${{ secrets.PROD_SMTP_PASSWORD }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
             echo "ENVIRONMENT=stage" >> $GITHUB_ENV
             echo "SERVICE_CPU=${{ vars.STAGE_SERVICE_CPU }}" >> $GITHUB_ENV
@@ -83,8 +81,6 @@ jobs:
             echo "TMP_TASK_DEFINITION_ARN_PARAMETER_NAME=${{ vars.STAGE_TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "CALLBACK_ENDPOINT_PARAMETER_NAME=${{ vars.STAGE_CALLBACK_ENDPOINT_PARAMETER_NAME }}" >> $GITHUB_ENV
             echo "SES_SMTP_CREDENTIALS_SECRET_NAME=${{ vars.STAGE_SES_SMTP_CREDENTIALS_SECRET_NAME }}" >> $GITHUB_ENV
-            echo "SMTP_USER=${{ secrets.STAGE_SMTP_USER }}" >> $GITHUB_ENV
-            echo "SMTP_PASSWORD=${{ secrets.STAGE_SMTP_PASSWORD }}" >> $GITHUB_ENV
           fi
           echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
     outputs:
@@ -103,8 +99,6 @@ jobs:
       TMP_TASK_DEFINITION_ARN_PARAMETER_NAME: ${{ env.TMP_TASK_DEFINITION_ARN_PARAMETER_NAME }}
       CALLBACK_ENDPOINT_PARAMETER_NAME: ${{ env.CALLBACK_ENDPOINT_PARAMETER_NAME }}
       SES_SMTP_CREDENTIALS_SECRET_NAME: ${{ env.SES_SMTP_CREDENTIALS_SECRET_NAME }}
-      SMTP_USER: ${{ env.SMTP_USER }}
-      SMTP_PASSWORD: ${{ env.SMTP_PASSWORD }}
       IMAGE_TAG: ${{ env.IMAGE_TAG }}
       IMAGE_NAME: ${{ env.ENVIRONMENT }}-${{ env.SERVICE_NAME }}
 
@@ -161,8 +155,6 @@ jobs:
       MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME }}
       CALLBACK_ENDPOINT_PARAMETER_NAME: ${{ needs.set-environment-variables.outputs.CALLBACK_ENDPOINT_PARAMETER_NAME }}
       SES_SMTP_CREDENTIALS_SECRET_NAME: ${{ needs.set-environment-variables.outputs.SES_SMTP_CREDENTIALS_SECRET_NAME }}
-      SMTP_USER: ${{ needs.set-environment-variables.outputs.SMTP_USER }}
-      SMTP_PASSWORD: ${{ needs.set-environment-variables.outputs.SMTP_PASSWORD }}
     runs-on: ubuntu-latest
     needs:
       - fetch-ecr-password
@@ -203,6 +195,8 @@ jobs:
           cdk deploy -c environment=${{ env.ENVIRONMENT }} \
           -c image_tag=${{ env.IMAGE_TAG }} \
           -c dd_api_key_secret_name=${{ ( env.ENVIRONMENT == 'prod' ) && secrets.PROD_DD_API_KEY_SECRET_NAME || secrets.STAGE_DD_API_KEY_SECRET_NAME }} \
+          -c smtp_user=${{ ( env.ENVIRONMENT == 'prod' ) && secrets.PROD_SMTP_USER || secrets.STAGE_SMTP_USER }} \
+          -c smtp_password=${{ ( env.ENVIRONMENT == 'prod' ) && secrets.PROD_SMTP_PASSWORD || secrets.STAGE_SMTP_PASSWORD }} \
           --require-approval never \
           --all
 

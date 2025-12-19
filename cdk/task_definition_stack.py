@@ -26,6 +26,8 @@ class TaskDefinitionStack(Stack):
             env_parameters: dict,
             image_tag: str,
             dd_api_key_secret_name: str,
+            smtp_user: str,
+            smtp_password: str,
             **kwargs
     ) -> None:
         super().__init__(
@@ -54,8 +56,8 @@ class TaskDefinitionStack(Stack):
         tmp_task_definition_arn_parameter_name = env_parameters['TMP_TASK_DEFINITION_ARN_PARAMETER_NAME']
         ses_smtp_credentials_secret_name = env_parameters['SES_SMTP_CREDENTIALS_SECRET_NAME']
         callback_endpoint_parameter_name = env_parameters['CALLBACK_ENDPOINT_PARAMETER_NAME']
-        smtp_user = env_parameters['SMTP_USER']
-        smtp_password = env_parameters['SMTP_PASSWORD']
+        # smtp_user = env_parameters['SMTP_USER']
+        # smtp_password = env_parameters['SMTP_PASSWORD']
         smtp_sender = env_parameters['SMTP_SENDER']
 
         task_definition_family = f'{selected_environment}-{service_name}'

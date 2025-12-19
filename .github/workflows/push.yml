@@ -129,6 +129,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Image build
+        continue-on-error: false
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -183,12 +184,9 @@ jobs:
 
       - name: Inject cross repo shared token
         working-directory: cdk
-        env:
-          SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
         run: |
           mv requirements.txt temp_requirements.txt
           sed -e "s/__SHARED_TOKEN__/${{ secrets.SHARED_TOKEN }}/g" temp_requirements.txt > requirements.txt
-          cat requirements.txt
 
       - name: Set CDK environment variables
         run: |
@@ -220,7 +218,8 @@ jobs:
           aws ecs update-service \
           --cluster ${{ env.ENVIRONMENT }} \
           --service ${{ env.SERVICE_NAME }} \
-          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }}
+          --task-definition ${{ steps.get-tmp-task-definition.outputs.task-definition-arn }} \
+          --no-paginate
           aws ecs wait services-stable \
           --cluster ${{ env.ENVIRONMENT }} \
           --services ${{ env.SERVICE_NAME }}

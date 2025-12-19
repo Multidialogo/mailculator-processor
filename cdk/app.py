@@ -5,6 +5,8 @@ from aws_cdk import (
     Tags
 )
 
+from os import environ
+
 from get_env_variables import GetEnvVariables
 from task_definition_stack import TaskDefinitionStack
 
@@ -13,17 +15,22 @@ if __name__ == "__main__":
 
     selected_environment = app.node.try_get_context('environment')
     image_tag = app.node.try_get_context('image_tag')
+    dd_api_key_secret_name = app.node.try_get_context('dd_api_key_secret_name')
 
     env_parameters = GetEnvVariables(selected_environment).env_dict
 
-    environment = Environment(account=env_parameters['ACCOUNT_ID'], region=env_parameters['AWS_REGION'])
+    account = environ.get('CDK_DEFAULT_ACCOUNT')
+    region = environ.get('CDK_DEFAULT_REGION')
+
+    environment = Environment(account=account, region=region)
 
     TaskDefinitionStack(
         app,
         f"{env_parameters['SELECTED_ENVIRONMENT']}-multicarrier-email-daemon-task-definition-stack",
         env_parameters=env_parameters,
         image_tag=image_tag,
-        env=environment
+        env=environment,
+        dd_api_key_secret_name=dd_api_key_secret_name
     )
 
     Tags.of(app).add('env', selected_environment)

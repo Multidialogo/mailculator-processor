@@ -27,6 +27,7 @@ class TaskDefinitionStack(Stack):
             env_parameters: dict,
             image_tag: str,
             dd_api_key_secret_name: str,
+            environment_secrets_resolver: EnvironmentSecretsResolver,
             smtp_user: str,
             smtp_password: str,
             **kwargs
@@ -58,10 +59,6 @@ class TaskDefinitionStack(Stack):
         ses_smtp_credentials_secret_name = env_parameters['SES_SMTP_CREDENTIALS_SECRET_NAME']
         callback_endpoint_parameter_name = env_parameters['CALLBACK_ENDPOINT_PARAMETER_NAME']
         smtp_sender = env_parameters['SMTP_SENDER']
-
-        environment_secrets_resolver = EnvironmentSecretsResolver(
-            selected_environment=selected_environment
-        )
 
         task_definition_family = f'{selected_environment}-{service_name}'
 
@@ -253,7 +250,7 @@ class TaskDefinitionStack(Stack):
         dd_api_key_secret = secretsmanager.Secret.from_secret_name_v2(
             scope=self,
             id='dd-api-key-secret',
-            secret_name=dd_api_key_secret_name,
+            secret_name=environment_secrets_resolver.datadog_api_key_secret_name,
         )
         dd_api_key_secret.grant_read(task_execution_role)
 

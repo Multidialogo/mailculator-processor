@@ -10,6 +10,9 @@ from os import environ
 from get_env_variables import GetEnvVariables
 from task_definition_stack import TaskDefinitionStack
 
+from multidialogo_cdk_shared.environment_secrets_resolver import EnvironmentSecretsResolver
+from multidialogo_cdk_shared.enums import EnvironmentsEnum
+
 if __name__ == "__main__":
     app = App()
 
@@ -26,6 +29,10 @@ if __name__ == "__main__":
 
     environment = Environment(account=account, region=region)
 
+    environment_secrets_resolver = EnvironmentSecretsResolver(
+        selected_environment=EnvironmentsEnum[selected_environment.upper()]
+    )
+
     TaskDefinitionStack(
         app,
         f"{env_parameters['SELECTED_ENVIRONMENT']}-multicarrier-email-daemon-task-definition-stack",
@@ -33,6 +40,7 @@ if __name__ == "__main__":
         image_tag=image_tag,
         env=environment,
         dd_api_key_secret_name=dd_api_key_secret_name,
+        environment_secrets_resolver=environment_secrets_resolver,
         smtp_user=smtp_user,
         smtp_password=smtp_password
     )

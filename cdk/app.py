@@ -39,7 +39,6 @@ if __name__ == "__main__":
         env_parameters=env_parameters,
         image_tag=image_tag,
         env=environment,
-        dd_api_key_secret_name=dd_api_key_secret_name,
         environment_secrets_resolver=environment_secrets_resolver,
         smtp_user=smtp_user,
         smtp_password=smtp_password

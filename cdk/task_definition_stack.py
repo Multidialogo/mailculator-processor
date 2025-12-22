@@ -11,6 +11,7 @@ from aws_cdk import (
     Tags, Duration
 )
 from constructs import Construct
+from multidialogo_cdk_shared.environment_secrets_resolver import EnvironmentSecretsResolver
 
 MD_REST_VOLUME_NAME = 'rest-volume'
 MC_VOLUME_NAME = 'mc-volume'
@@ -57,6 +58,10 @@ class TaskDefinitionStack(Stack):
         ses_smtp_credentials_secret_name = env_parameters['SES_SMTP_CREDENTIALS_SECRET_NAME']
         callback_endpoint_parameter_name = env_parameters['CALLBACK_ENDPOINT_PARAMETER_NAME']
         smtp_sender = env_parameters['SMTP_SENDER']
+
+        environment_secrets_resolver = EnvironmentSecretsResolver(
+            selected_environment=selected_environment
+        )
 
         task_definition_family = f'{selected_environment}-{service_name}'
 
@@ -392,7 +397,38 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='MYSQL_PIPELINES_ENABLED',
-            value='false'
+            value='true'
+        )
+
+        db_secret = secretsmanager.Secret.from_secret_name_v2(
+            scope=self,
+            id='db-secret',
+            secret_name=environment_secrets_resolver.rds_instances_multicarrier_credentials_name_secret_name
+        )
+
+        container.add_secret(
+            name='MYSQL_HOST',
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='host')
+        )
+
+        container.add_secret(
+            name='MYSQL_PORT',
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='port')
+        )
+
+        container.add_secret(
+            name='MYSQL_USER',
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='username')
+        )
+
+        container.add_secret(
+            name='MYSQL_PASSWORD',
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='password')
+        )
+
+        container.add_secret(
+            name='MYSQL_DATABASE',
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='dbInstanceIdentifier')
         )
 
         ssm.StringParameter(

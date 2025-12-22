@@ -26,7 +26,6 @@ class TaskDefinitionStack(Stack):
             id: str,
             env_parameters: dict,
             image_tag: str,
-            dd_api_key_secret_name: str,
             environment_secrets_resolver: EnvironmentSecretsResolver,
             smtp_user: str,
             smtp_password: str,
@@ -250,7 +249,7 @@ class TaskDefinitionStack(Stack):
         dd_api_key_secret = secretsmanager.Secret.from_secret_name_v2(
             scope=self,
             id='dd-api-key-secret',
-            secret_name=environment_secrets_resolver.datadog_api_key_secret_name,
+            secret_name=environment_secrets_resolver.monitoring_datadog_fargate_key_secret_name,
         )
         dd_api_key_secret.grant_read(task_execution_role)
 

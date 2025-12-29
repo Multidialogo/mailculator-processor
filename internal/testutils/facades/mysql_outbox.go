@@ -21,6 +21,7 @@ func NewMySQLConfigFromEnv() string {
 	user := os.Getenv("MYSQL_USER")
 	password := os.Getenv("MYSQL_PASSWORD")
 	database := os.Getenv("MYSQL_DATABASE")
+	tls := os.Getenv("MYSQL_TLS")
 
 	if host == "" {
 		host = "127.0.0.1"
@@ -37,8 +38,11 @@ func NewMySQLConfigFromEnv() string {
 	if database == "" {
 		database = "mailculator_test"
 	}
+	if tls == "" {
+		tls = "true"
+	}
 
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, database)
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=%s", user, password, host, port, database, tls)
 }
 
 func NewMySQLOutboxFacade() (*MySQLOutboxFacade, error) {

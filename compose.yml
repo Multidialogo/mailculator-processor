@@ -30,6 +30,7 @@ services:
       MYSQL_USER: 'root'
       MYSQL_PASSWORD: 'test'
       MYSQL_DATABASE: 'mailculator_test'
+      MYSQL_TLS: 'false'
       DYNAMODB_PIPELINES_ENABLED: 'true'
       MYSQL_PIPELINES_ENABLED: 'true'
     command: >

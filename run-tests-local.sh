@@ -26,6 +26,7 @@ export MYSQL_PORT=3306
 export MYSQL_USER=root
 export MYSQL_PASSWORD=test
 export MYSQL_DATABASE=mailculator_test
+export MYSQL_TLS=false
 export DYNAMODB_PIPELINES_ENABLED=true
 export MYSQL_PIPELINES_ENABLED=true
 

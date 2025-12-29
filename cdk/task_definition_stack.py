@@ -428,6 +428,11 @@ class TaskDefinitionStack(Stack):
             secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='dbInstanceIdentifier')
         )
 
+        container.add_environment(
+            name='MYSQL_TLS',
+            value='true'
+        )
+
         ssm.StringParameter(
             scope=self,
             id='temporary-task-definition-arn',

@@ -399,8 +399,9 @@ class TaskDefinitionStack(Stack):
         db_secret = secretsmanager.Secret.from_secret_name_v2(
             scope=self,
             id='db-secret',
-            secret_name=environment_secrets_resolver.rds_instances_multicarrier_credentials_name_secret_name
+            secret_name=environment_secrets_resolver.rds_instances_multicarrier_credentials_admin_secret_name
         )
+        db_secret.grant_read(task_execution_role)
 
         container.add_secret(
             name='MYSQL_HOST',

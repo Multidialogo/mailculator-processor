@@ -425,7 +425,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_secret(
             name='MYSQL_DATABASE',
-            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='dbInstanceIdentifier')
+            secret=ecs.Secret.from_secrets_manager(secret=db_secret, field='dbname')
         )
 
         container.add_environment(

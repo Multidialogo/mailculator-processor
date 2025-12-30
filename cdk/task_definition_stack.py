@@ -234,7 +234,7 @@ class TaskDefinitionStack(Stack):
             ecs.MountPoint(
                 container_path=mc_email_efs_folder_name,
                 source_volume=MC_VOLUME_NAME,
-                read_only=True
+                read_only=False
             )
         )
 

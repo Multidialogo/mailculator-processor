@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/textproto"
 	"os"
 	"strings"
 	"testing"
@@ -119,6 +120,25 @@ func TestSendEmailError(t *testing.T) {
 	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
 	assert.Equal(t,
 		"level=INFO msg=\"processing outbox 1\"\nlevel=ERROR msg=\"failed to send, error: some send error\" outbox=1",
+		strings.TrimSpace(buf.String()),
+	)
+}
+
+func TestSendEmailThrottlingRequeue(t *testing.T) {
+	payloadFile := createPayloadFile(t)
+	buf, logger := mocks.NewLoggerMock()
+	outboxServiceMock := mocks.NewOutboxMock(
+		mocks.Email(outbox.Email{Id: "1", Status: "", PayloadFilePath: payloadFile}),
+	)
+	senderServiceMock := newSenderMock(&textproto.Error{Code: 454, Msg: "Throttling failure"})
+	sender := MainSenderPipeline{outbox: outboxServiceMock, client: senderServiceMock, attachmentsBasePath: "/base/path/", logger: logger}
+
+	sender.Process(context.TODO())
+
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Equal(t, "requeue", outboxServiceMock.LastMethod())
+	assert.Equal(t,
+		"level=INFO msg=\"processing outbox 1\"\nlevel=WARN msg=\"smtp throttling, requeueing: 454 Throttling failure\" outbox=1",
 		strings.TrimSpace(buf.String()),
 	)
 }

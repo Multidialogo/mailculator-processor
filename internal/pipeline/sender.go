@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/textproto"
 	"sync"
 
 	"mailculator-processor/internal/email"
@@ -59,8 +61,15 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 			}
 
 			if err = p.client.Send(payload, p.attachmentsBasePath); err != nil {
-				logger.Error(fmt.Sprintf("failed to send, error: %v", err))
-				p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, err.Error(), outboxEmail.TTL)
+				if isSMTPThrottling(err) {
+					logger.Warn(fmt.Sprintf("smtp throttling, requeueing: %v", err))
+					if requeueErr := p.outbox.Requeue(context.Background(), outboxEmail.Id, outboxEmail.TTL); requeueErr != nil {
+						logger.Error(fmt.Sprintf("error requeueing email, error: %v", requeueErr))
+					}
+				} else {
+					logger.Error(fmt.Sprintf("failed to send, error: %v", err))
+					p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, err.Error(), outboxEmail.TTL)
+				}
 			} else {
 				logger.Info("successfully sent")
 				p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusSent, "", outboxEmail.TTL)
@@ -76,4 +85,17 @@ func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, em
 		msg := fmt.Sprintf("error updating status to %v, error: %v", status, err)
 		logger.Error(msg)
 	}
+}
+
+func isSMTPThrottling(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var smtpErr *textproto.Error
+	if errors.As(err, &smtpErr) {
+		return smtpErr.Code == 454
+	}
+
+	return false
 }

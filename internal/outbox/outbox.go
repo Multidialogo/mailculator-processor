@@ -237,6 +237,60 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	return err
 }
 
+// Requeue updates the email from PROCESSING back to READY and removes the PROCESSING history row.
+// The operation is executed within a transaction with retry logic for transient errors.
+// Note: ttl parameter is ignored for MySQL.
+func (o *Outbox) Requeue(ctx context.Context, id string, _ *int64) error {
+	updateQuery := `
+		UPDATE emails
+		SET status = ?, reason = ?, version = version + 1
+		WHERE id = ? AND status = ?
+	`
+	deleteProcessingQuery := `
+		DELETE FROM email_statuses
+		WHERE email_id = ? AND status = ?
+		ORDER BY id DESC
+		LIMIT 1
+	`
+
+	var err error
+	for attempt := range maxAttempts {
+		err = o.executeInTransaction(ctx, func(tx *sql.Tx) error {
+			result, execErr := tx.ExecContext(ctx, updateQuery, StatusReady, "", id, StatusProcessing)
+			if execErr != nil {
+				return execErr
+			}
+
+			affected, affErr := result.RowsAffected()
+			if affErr != nil {
+				return affErr
+			}
+
+			if affected == 0 {
+				return ErrLockNotAcquired
+			}
+
+			_, delErr := tx.ExecContext(ctx, deleteProcessingQuery, id, StatusProcessing)
+			return delErr
+		})
+
+		if err == nil || !o.shouldRetryMySQL(err) {
+			return err
+		}
+
+		sleep := o.backoffDuration(attempt)
+		timer := time.NewTimer(sleep)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return err
+}
+
 // Ready updates the email to READY status with the eml file path.
 // Expected from status is INTAKING.
 // The operation is executed within a transaction with retry logic for transient errors.

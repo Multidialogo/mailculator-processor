@@ -33,29 +33,29 @@ func (p *IntakePipeline) Process(ctx context.Context) {
 
 	for _, e := range acceptedList {
 		wg.Add(1)
-		go func() {
+		go func(email outbox.Email) {
 			defer wg.Done()
-			p.logger.Info(fmt.Sprintf("processing outbox %v", e.Id))
-			subLogger := p.logger.With("outbox", e.Id)
+			p.logger.Info(fmt.Sprintf("processing outbox %v", email.Id))
+			subLogger := p.logger.With("outbox", email.Id)
 
-			if err = p.outbox.Update(ctx, e.Id, outbox.StatusIntaking, "", e.TTL); err != nil {
+			if err = p.outbox.Update(ctx, email.Id, outbox.StatusIntaking, "", email.TTL); err != nil {
 				subLogger.Warn(fmt.Sprintf("failed to acquire processing lock, error: %v", err))
 				return
 			}
 
-			if err := p.validatePayload(e); err != nil {
+			if err := p.validatePayload(email); err != nil {
 				subLogger.Error(fmt.Sprintf("failed to validate payload, error: %v", err))
-				p.handle(context.Background(), subLogger, e.Id, outbox.StatusInvalid, err.Error(), e.TTL)
+				p.handle(context.Background(), subLogger, email.Id, outbox.StatusInvalid, err.Error(), email.TTL)
 				return
 			}
 
-			if err := p.outbox.Ready(context.Background(), e.Id, "", e.TTL); err != nil {
+			if err := p.outbox.Ready(context.Background(), email.Id, "", email.TTL); err != nil {
 				subLogger.Error(fmt.Sprintf("failed to update status to READY: %v", err))
-				p.handle(context.Background(), subLogger, e.Id, outbox.StatusInvalid, err.Error(), e.TTL)
+				p.handle(context.Background(), subLogger, email.Id, outbox.StatusInvalid, err.Error(), email.TTL)
 			} else {
 				subLogger.Info("successfully intaken")
 			}
-		}()
+		}(e)
 	}
 
 	wg.Wait()

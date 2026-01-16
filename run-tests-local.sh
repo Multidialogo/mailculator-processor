@@ -22,7 +22,6 @@ export MYSQL_USER=root
 export MYSQL_PASSWORD=test
 export MYSQL_DATABASE=mailculator_test
 export MYSQL_TLS=false
-export MYSQL_PIPELINES_ENABLED=true
 
 if ! docker compose -f "$script_dir/compose.yml" --profile test-deps up -d --build --force-recreate; then
   echo "Could not start test dependencies"

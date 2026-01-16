@@ -345,11 +345,6 @@ class TaskDefinitionStack(Stack):
             value=ses_smtp_credentials_secret_name
         )
 
-        container.add_environment(
-            name='MYSQL_PIPELINES_ENABLED',
-            value='true'
-        )
-
         db_secret = secretsmanager.Secret.from_secret_name_v2(
             scope=self,
             id='db-secret',

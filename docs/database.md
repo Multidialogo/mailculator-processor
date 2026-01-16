@@ -9,7 +9,6 @@ type Email struct {
     PayloadFilePath string
     UpdatedAt       string
     Reason          string
-    TTL             *int64  // Attualmente non usato (nil)
     Version         int     // Versione per optimistic locking
 }
 ```
@@ -39,8 +38,6 @@ CREATE TABLE IF NOT EXISTS emails (
     INDEX idx_status_updated (status, updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
-
-**Nota**: MySQL non supporta TTL nativo. La pulizia dei record obsoleti deve essere gestita esternamente.
 
 ### Tabella `email_statuses`
 Tabella per lo storico dei cambi di stato (history).

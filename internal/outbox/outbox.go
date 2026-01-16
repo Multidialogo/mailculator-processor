@@ -48,7 +48,6 @@ type Email struct {
 	PayloadFilePath string
 	UpdatedAt       string
 	Reason          string
-	TTL             *int64
 	Version         int
 }
 
@@ -185,8 +184,7 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 // Update changes the status of an email using optimistic locking based on version.
 // It determines the expected "from" status based on the target "to" status.
 // The operation is executed within a transaction with retry logic for transient errors.
-// Note: ttl parameter is ignored for MySQL.
-func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, _ *int64) error {
+func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string) error {
 	fromStatus := getExpectedFromStatus(status)
 
 	updateQuery := `
@@ -239,8 +237,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 
 // Requeue updates the email from PROCESSING back to READY and removes the PROCESSING history row.
 // The operation is executed within a transaction with retry logic for transient errors.
-// Note: ttl parameter is ignored for MySQL.
-func (o *Outbox) Requeue(ctx context.Context, id string, _ *int64) error {
+func (o *Outbox) Requeue(ctx context.Context, id string) error {
 	updateQuery := `
 		UPDATE emails
 		SET status = ?, reason = ?, version = version + 1
@@ -294,8 +291,7 @@ func (o *Outbox) Requeue(ctx context.Context, id string, _ *int64) error {
 // Ready updates the email to READY status with the eml file path.
 // Expected from status is INTAKING.
 // The operation is executed within a transaction with retry logic for transient errors.
-// Note: ttl parameter is ignored for MySQL.
-func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, _ *int64) error {
+func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string) error {
 	updateQuery := `
 		UPDATE emails
 		SET status = ?, eml_file_path = ?, version = version + 1

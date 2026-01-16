@@ -37,7 +37,7 @@ func serverStatusOkHandleFunc(ts *testServer) func(w http.ResponseWriter, r *htt
 }
 
 func TestSuccessCallbackPipeline(t *testing.T) {
-	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}))
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{Id: "1", Status: ""}))
 	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
 
 	callbacks := []*CallbackPipeline{
@@ -93,7 +93,7 @@ func TestLockUpdateError(t *testing.T) {
 func TestHttpClientDoError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: ""}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 		mocks.UpdateMethodFailsCall(2),
 	)
@@ -111,7 +111,7 @@ func TestHttpClientDoError(t *testing.T) {
 func TestAcknowledgedUpdateError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
-		mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}),
+		mocks.Email(outbox.Email{Id: "1", Status: ""}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 		mocks.UpdateMethodFailsCall(2),
 	)
@@ -130,7 +130,7 @@ func TestAcknowledgedUpdateError(t *testing.T) {
 
 func TestStatusConflict(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
-	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{Id: "1", Status: "", EmlFilePath: ""}))
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{Id: "1", Status: ""}))
 	ts := newTestServer(http.StatusConflict)
 	defer ts.server.Close()
 	callbackConfig := CallbackConfig{Url: ts.server.URL, RetryInterval: 2, MaxRetries: 3}

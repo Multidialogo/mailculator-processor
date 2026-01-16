@@ -115,8 +115,8 @@ func TestMySQLOutboxReadyWorkflow(t *testing.T) {
 	require.NoError(t, err)
 	fixtures = append(fixtures, id)
 
-	// update to READY with eml file path
-	err = sut.Ready(context.TODO(), id, "/path/to/test.eml", nil)
+	// update to READY without eml file path
+	err = sut.Ready(context.TODO(), id, "", nil)
 	require.NoError(t, err)
 
 	// verify status changed to READY
@@ -125,10 +125,10 @@ func TestMySQLOutboxReadyWorkflow(t *testing.T) {
 	require.Len(t, res, 1)
 	assert.Equal(t, id, res[0].Id)
 	assert.Equal(t, outbox.StatusReady, res[0].Status)
-	assert.Equal(t, "/path/to/test.eml", res[0].EmlFilePath)
+	assert.Empty(t, res[0].EmlFilePath)
 
 	// trying to call Ready again should fail (status is now READY, not INTAKING)
-	err = sut.Ready(context.TODO(), id, "/another/path.eml", nil)
+	err = sut.Ready(context.TODO(), id, "", nil)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
 }
@@ -195,7 +195,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	assert.Equal(t, outbox.StatusIntaking, status)
 
 	// INTAKING -> READY (using Ready method)
-	err = sut.Ready(context.TODO(), id, "/path/to/email.eml", nil)
+	err = sut.Ready(context.TODO(), id, "", nil)
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)

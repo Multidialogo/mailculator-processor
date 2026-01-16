@@ -6,9 +6,6 @@ callback:
   retry_interval: 5
   url: ${PIPELINE_CALLBACK_URL}
 
-eml-storage:
-  path: "${EML_STORAGE_PATH}"
-
 health-check:
   server:
     port: 8080

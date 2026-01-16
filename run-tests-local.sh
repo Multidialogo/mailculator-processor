@@ -15,7 +15,6 @@ export SMTP_ALLOW_INSECURE_TLS=true
 export PIPELINE_INTERVAL=1
 export PIPELINE_CALLBACK_URL=http://127.0.0.1:8080
 export ATTACHMENTS_BASE_PATH=testdata/attachments
-export EML_STORAGE_PATH=testdata/.out/eml
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3306
 export MYSQL_USER=root

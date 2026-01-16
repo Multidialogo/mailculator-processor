@@ -10,7 +10,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"mailculator-processor/internal/eml"
 	"mailculator-processor/internal/healthcheck"
 	"mailculator-processor/internal/mysql_outbox"
 	"mailculator-processor/internal/pipeline"
@@ -33,7 +32,6 @@ type configProvider interface {
 	GetPipelineInterval() int
 	GetCallbackConfig() pipeline.CallbackConfig
 	GetSmtpConfig() smtp.Config
-	GetEmlStoragePath() string
 	GetAttachmentsBasePath() string
 	GetMySQLDSN() string
 }
@@ -46,7 +44,6 @@ func New(cp configProvider) (*App, error) {
 
 func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 	client := smtp.New(cp.GetSmtpConfig())
-	emlStorage := eml.NewEMLStorage(cp.GetEmlStoragePath())
 	callbackConfig := cp.GetCallbackConfig()
 	healthCheckServer := healthcheck.NewServer(cp.GetHealthCheckServerPort())
 
@@ -78,8 +75,8 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 	mysqlOutbox := mysql_outbox.NewOutbox(mysqlDB)
 
 	pipes = append(pipes,
-		pipeline.NewIntakePipeline(mysqlOutbox, emlStorage, cp.GetAttachmentsBasePath()),
-		pipeline.NewMainSenderPipeline(mysqlOutbox, client),
+		pipeline.NewIntakePipeline(mysqlOutbox),
+		pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath()),
 		pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig),
 		pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig),
 	)

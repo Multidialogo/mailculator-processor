@@ -1,15 +1,12 @@
 package smtp
 
 import (
-	"bufio"
 	"crypto/tls"
 	"fmt"
 	"net/mail"
-	"os"
-	"strings"
+	"net/smtp"
 
-	"github.com/emersion/go-sasl"
-	"github.com/emersion/go-smtp"
+	"mailculator-processor/internal/email"
 )
 
 type Config struct {
@@ -22,65 +19,85 @@ type Config struct {
 }
 
 type Client struct {
-	cfg Config
+	cfg     Config
+	builder *MessageBuilder
 }
 
 func New(cfg Config) *Client {
-	return &Client{cfg: cfg}
+	return &Client{
+		cfg:     cfg,
+		builder: &MessageBuilder{},
+	}
 }
 
-func (c *Client) Send(emlFilePath string) error {
+func (c *Client) Send(payload email.Payload, attachmentsBasePath string) error {
+	message, err := c.builder.Build(payload, attachmentsBasePath)
+	if err != nil {
+		return err
+	}
+
 	tlsCfg := &tls.Config{
 		ServerName:         c.cfg.Host,
 		InsecureSkipVerify: c.cfg.AllowInsecureTls,
 	}
 
 	server := fmt.Sprintf("%s:%d", c.cfg.Host, c.cfg.Port)
-	client, err := smtp.DialStartTLS(server, tlsCfg)
+	client, err := smtp.Dial(server)
 	if err != nil {
 		return err
 	}
 
-	defer func() { _ = client.Quit() }()
 	defer func() { _ = client.Close() }()
 
-	auth := sasl.NewPlainClient("", c.cfg.User, c.cfg.Password)
-	if err := client.Auth(auth); err != nil {
+	if err := client.Hello("localhost"); err != nil {
 		return err
 	}
 
-	reader, err := os.Open(emlFilePath)
-	if err != nil {
-		return err
-	}
-
-	defer func() { _ = reader.Close() }()
-
-	rcpt, err := c.parseRecipient(reader)
-	if err != nil {
-		return err
-	}
-
-	return client.SendMail(c.cfg.From, []string{rcpt}, reader)
-}
-
-func (c *Client) parseRecipient(reader *os.File) (string, error) {
-	defer func() { _, _ = reader.Seek(0, 0) }()
-
-	scanner := bufio.NewScanner(reader)
-	for i := 0; i < 256 && scanner.Scan(); i++ {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "To:") {
-			normal := strings.TrimPrefix(line, "To:")
-			normal = strings.TrimSpace(normal)
-			addr, err := mail.ParseAddress(normal)
-			if err != nil {
-				return "", err
-			}
-
-			return addr.Address, nil
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(tlsCfg); err != nil {
+			return err
 		}
 	}
 
-	return "", fmt.Errorf("could not find recipient in reader")
+	if c.cfg.User != "" {
+		auth := smtp.PlainAuth("", c.cfg.User, c.cfg.Password, c.cfg.Host)
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+
+	from, err := mail.ParseAddress(c.cfg.From)
+	if err != nil {
+		return err
+	}
+
+	to, err := mail.ParseAddress(payload.To)
+	if err != nil {
+		return err
+	}
+
+	if err := client.Mail(from.Address); err != nil {
+		return err
+	}
+	if err := client.Rcpt(to.Address); err != nil {
+		return err
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(message); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	if err := client.Quit(); err != nil {
+		return err
+	}
+
+	return nil
 }

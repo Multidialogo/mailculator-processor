@@ -1,7 +1,7 @@
 # Pipeline Parallele del Mailculator Processor
 
 ## Panoramica
-Il sistema esegue quattro pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio.
+Il sistema esegue quattro pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio diretto.
 
 ## Stati degli Email
 - **ACCEPTED**: Email accettato, in attesa di intake
@@ -24,13 +24,7 @@ Questa pipeline elabora gli email dallo stato ACCEPTED.
    - Aggiorna lo stato a "INTAKING" (lock di elaborazione)
    - Legge il file JSON dal percorso specificato in `PayloadFilePath`
    - Valida il payload JSON (verifica campi richiesti e formati)
-   - Crea un oggetto EML dal payload con:
-     - Id, From, ReplyTo, To, Subject
-     - BodyHTML e/o BodyText
-     - Attachments (opzionali)
-     - CustomHeaders (opzionali)
-   - Salva il file .eml su EFS utilizzando EMLStorage
-   - In caso di successo: aggiorna stato a "READY" con il percorso del file .eml salvato in `EMLFilePath`
+   - In caso di successo: aggiorna stato a "READY"
    - In caso di fallimento: aggiorna stato a "INVALID" con motivo errore
 3. **Ciclo**: Si ripete ogni intervallo configurato
 
@@ -59,7 +53,8 @@ Questa pipeline elabora gli email dallo stato READY.
 1. **Query**: Recupera fino a 25 email con stato "READY"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "PROCESSING" (lock di elaborazione)
-   - Tenta l'invio tramite client SMTP
+   - Legge il payload JSON e costruisce il messaggio MIME in memoria
+   - Tenta l'invio tramite client SMTP (net/smtp)
    - In caso di successo: aggiorna stato a "SENT"
    - In caso di fallimento: aggiorna stato a "FAILED" con motivo errore
 3. **Ciclo**: Si ripete ogni intervallo configurato

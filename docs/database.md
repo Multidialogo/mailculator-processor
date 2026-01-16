@@ -5,7 +5,6 @@
 type Email struct {
     Id              string
     Status          string
-    EmlFilePath     string // Campo mantenuto per compatibilità, non usato
     PayloadFilePath string
     UpdatedAt       string
     Reason          string
@@ -27,7 +26,6 @@ CREATE TABLE IF NOT EXISTS emails (
         'CALLING-SENT-CALLBACK','CALLING-FAILED-CALLBACK',
         'SENT-ACKNOWLEDGED','FAILED-ACKNOWLEDGED'
     ) NOT NULL,
-    eml_file_path VARCHAR(500),
     payload_file_path VARCHAR(500),
     reason TEXT,
     version INT NOT NULL DEFAULT 1,
@@ -75,7 +73,7 @@ Le query di lettura utilizzano `FOR UPDATE SKIP LOCKED` per:
 - Migliorare il throughput in scenari con più processori concorrenti
 
 ```sql
-SELECT id, status, eml_file_path, payload_file_path, reason, version, updated_at
+SELECT id, status, payload_file_path, reason, version, updated_at
 FROM emails
 WHERE status = ?
 ORDER BY updated_at ASC

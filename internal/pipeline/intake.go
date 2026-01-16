@@ -49,7 +49,7 @@ func (p *IntakePipeline) Process(ctx context.Context) {
 				return
 			}
 
-			if err := p.outbox.Ready(context.Background(), email.Id, ""); err != nil {
+			if err := p.outbox.Ready(context.Background(), email.Id); err != nil {
 				subLogger.Error(fmt.Sprintf("failed to update status to READY: %v", err))
 				p.handle(context.Background(), subLogger, email.Id, outbox.StatusInvalid, err.Error())
 			} else {

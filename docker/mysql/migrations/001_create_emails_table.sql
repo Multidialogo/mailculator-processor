@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS emails (
         'CALLING-SENT-CALLBACK','CALLING-FAILED-CALLBACK',
         'SENT-ACKNOWLEDGED','FAILED-ACKNOWLEDGED'
     ) NOT NULL,
-    eml_file_path VARCHAR(500),
     payload_file_path VARCHAR(500),
     reason TEXT,
     version INT NOT NULL DEFAULT 1,

@@ -1,12 +1,11 @@
 //go:build repository
 
-package mysql_outbox
+package outbox
 
 import (
 	"context"
 	"testing"
 
-	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/testutils/facades"
 
 	"github.com/stretchr/testify/assert"
@@ -46,7 +45,7 @@ func TestMySQLOutboxComponentWorkflow(t *testing.T) {
 	defer deleteFixtures(t, facade)
 
 	// no record in db, should return 0
-	res, err := sut.Query(context.TODO(), outbox.StatusReady, 25)
+	res, err := sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 0)
 
@@ -60,38 +59,38 @@ func TestMySQLOutboxComponentWorkflow(t *testing.T) {
 	fixtures = append(fixtures, anotherId)
 
 	// filtering by status READY should return 2 records at this point
-	res, err = sut.Query(context.TODO(), outbox.StatusReady, 25)
+	res, err = sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 2)
 
 	// same filter with limit 1 should give only 1 record
-	res, err = sut.Query(context.TODO(), outbox.StatusReady, 1)
+	res, err = sut.Query(context.TODO(), StatusReady, 1)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
 
 	// filtering by status PROCESSING should return 0 records at this point
-	res, err = sut.Query(context.TODO(), outbox.StatusProcessing, 25)
+	res, err = sut.Query(context.TODO(), StatusProcessing, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 0)
 
 	// update fixture to status PROCESSING
-	err = sut.Update(context.TODO(), id, outbox.StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
 	require.NoError(t, err)
 
 	// filtering by status READY should return 1 record at this point
-	res, err = sut.Query(context.TODO(), outbox.StatusReady, 25)
+	res, err = sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
-	assert.Equal(t, outbox.StatusReady, res[0].Status)
+	assert.Equal(t, StatusReady, res[0].Status)
 
 	// filtering by status PROCESSING should return 1 record at this point
-	res, err = sut.Query(context.TODO(), outbox.StatusProcessing, 25)
+	res, err = sut.Query(context.TODO(), StatusProcessing, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
-	assert.Equal(t, outbox.StatusProcessing, res[0].Status)
+	assert.Equal(t, StatusProcessing, res[0].Status)
 
 	// item already is in status PROCESSING, trying to update from READY should fail
-	err = sut.Update(context.TODO(), id, outbox.StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
 }
@@ -111,7 +110,7 @@ func TestMySQLOutboxReadyWorkflow(t *testing.T) {
 	defer deleteFixtures(t, facade)
 
 	// insert a record in INTAKING status
-	id, err := facade.AddEmailWithStatus(context.TODO(), outbox.StatusIntaking, "")
+	id, err := facade.AddEmailWithStatus(context.TODO(), StatusIntaking, "")
 	require.NoError(t, err)
 	fixtures = append(fixtures, id)
 
@@ -120,11 +119,11 @@ func TestMySQLOutboxReadyWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify status changed to READY
-	res, err := sut.Query(context.TODO(), outbox.StatusReady, 25)
+	res, err := sut.Query(context.TODO(), StatusReady, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
 	assert.Equal(t, id, res[0].Id)
-	assert.Equal(t, outbox.StatusReady, res[0].Status)
+	assert.Equal(t, StatusReady, res[0].Status)
 	assert.Empty(t, res[0].EmlFilePath)
 
 	// trying to call Ready again should fail (status is now READY, not INTAKING)
@@ -146,11 +145,11 @@ func TestMySQLOutboxCreateAndDelete(t *testing.T) {
 
 	// create a new email
 	id := "test-create-delete-id"
-	err = sut.Create(context.TODO(), id, outbox.StatusAccepted, "/path/to/payload.json")
+	err = sut.Create(context.TODO(), id, StatusAccepted, "/path/to/payload.json")
 	require.NoError(t, err)
 
 	// verify it exists
-	res, err := sut.Query(context.TODO(), outbox.StatusAccepted, 25)
+	res, err := sut.Query(context.TODO(), StatusAccepted, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
 	assert.Equal(t, id, res[0].Id)
@@ -160,7 +159,7 @@ func TestMySQLOutboxCreateAndDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify it's gone
-	res, err = sut.Query(context.TODO(), outbox.StatusAccepted, 25)
+	res, err = sut.Query(context.TODO(), StatusAccepted, 25)
 	require.NoError(t, err)
 	require.Len(t, res, 0)
 }
@@ -183,16 +182,16 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	}()
 
 	// Create in ACCEPTED status
-	err = sut.Create(context.TODO(), id, outbox.StatusAccepted, "/path/to/payload.json")
+	err = sut.Create(context.TODO(), id, StatusAccepted, "/path/to/payload.json")
 	require.NoError(t, err)
 
 	// ACCEPTED -> INTAKING
-	err = sut.Update(context.TODO(), id, outbox.StatusIntaking, "", nil)
+	err = sut.Update(context.TODO(), id, StatusIntaking, "", nil)
 	require.NoError(t, err)
 
 	status, err := facade.GetEmailStatus(context.TODO(), id)
 	require.NoError(t, err)
-	assert.Equal(t, outbox.StatusIntaking, status)
+	assert.Equal(t, StatusIntaking, status)
 
 	// INTAKING -> READY (using Ready method)
 	err = sut.Ready(context.TODO(), id, "", nil)
@@ -200,25 +199,37 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)
 	require.NoError(t, err)
-	assert.Equal(t, outbox.StatusReady, status)
+	assert.Equal(t, StatusReady, status)
 
 	// READY -> PROCESSING
-	err = sut.Update(context.TODO(), id, outbox.StatusProcessing, "", nil)
-	require.NoError(t, err)
-
-	// PROCESSING -> SENT
-	err = sut.Update(context.TODO(), id, outbox.StatusSent, "", nil)
-	require.NoError(t, err)
-
-	// SENT -> CALLING-SENT-CALLBACK
-	err = sut.Update(context.TODO(), id, outbox.StatusCallingSentCallback, "", nil)
-	require.NoError(t, err)
-
-	// CALLING-SENT-CALLBACK -> SENT-ACKNOWLEDGED
-	err = sut.Update(context.TODO(), id, outbox.StatusSentAcknowledged, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)
 	require.NoError(t, err)
-	assert.Equal(t, outbox.StatusSentAcknowledged, status)
+	assert.Equal(t, StatusProcessing, status)
+
+	// PROCESSING -> SENT
+	err = sut.Update(context.TODO(), id, StatusSent, "", nil)
+	require.NoError(t, err)
+
+	status, err = facade.GetEmailStatus(context.TODO(), id)
+	require.NoError(t, err)
+	assert.Equal(t, StatusSent, status)
+
+	// SENT -> CALLING-SENT-CALLBACK
+	err = sut.Update(context.TODO(), id, StatusCallingSentCallback, "", nil)
+	require.NoError(t, err)
+
+	status, err = facade.GetEmailStatus(context.TODO(), id)
+	require.NoError(t, err)
+	assert.Equal(t, StatusCallingSentCallback, status)
+
+	// CALLING-SENT-CALLBACK -> SENT-ACKNOWLEDGED
+	err = sut.Update(context.TODO(), id, StatusSentAcknowledged, "", nil)
+	require.NoError(t, err)
+
+	status, err = facade.GetEmailStatus(context.TODO(), id)
+	require.NoError(t, err)
+	assert.Equal(t, StatusSentAcknowledged, status)
 }

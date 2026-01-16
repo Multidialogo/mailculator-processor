@@ -11,7 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"mailculator-processor/internal/healthcheck"
-	"mailculator-processor/internal/mysql_outbox"
+	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
@@ -72,7 +72,7 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 		return nil, fmt.Errorf("failed to ping MySQL: %w", err)
 	}
 
-	mysqlOutbox := mysql_outbox.NewOutbox(mysqlDB)
+	mysqlOutbox := outbox.NewOutbox(mysqlDB)
 
 	pipes = append(pipes,
 		pipeline.NewIntakePipeline(mysqlOutbox),

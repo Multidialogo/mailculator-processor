@@ -1,6 +1,6 @@
 //go:build unit
 
-package mysql_outbox
+package outbox
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"mailculator-processor/internal/outbox"
 )
 
 func TestQuery_WhenDatabaseHasRecords_ShouldReturnEmails(t *testing.T) {
@@ -34,7 +32,7 @@ func TestQuery_WhenDatabaseHasRecords_ShouldReturnEmails(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	emails, err := sut.Query(context.TODO(), outbox.StatusReady, 25)
+	emails, err := sut.Query(context.TODO(), StatusReady, 25)
 
 	assert.NoError(t, err)
 	require.Len(t, emails, 2)
@@ -58,7 +56,7 @@ func TestQuery_WhenDatabaseReturnsError_ShouldReturnError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	_, err = sut.Query(context.TODO(), outbox.StatusReady, 25)
+	_, err = sut.Query(context.TODO(), StatusReady, 25)
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedError, err)
@@ -80,7 +78,7 @@ func TestQuery_WhenDatabaseHasNoRecords_ShouldReturnEmptySlice(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	emails, err := sut.Query(context.TODO(), outbox.StatusReady, 10)
+	emails, err := sut.Query(context.TODO(), StatusReady, 10)
 
 	assert.NoError(t, err)
 	assert.Len(t, emails, 0)
@@ -105,7 +103,7 @@ func TestUpdate_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", outbox.StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
 
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -126,7 +124,7 @@ func TestUpdate_WhenNoRowsAffected_ShouldReturnLockError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", outbox.StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
@@ -149,7 +147,7 @@ func TestUpdate_WhenDatabaseReturnsError_ShouldReturnError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", outbox.StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedError, err)
@@ -209,16 +207,16 @@ func TestGetExpectedFromStatus_ShouldReturnCorrectTransitions(t *testing.T) {
 		toStatus   string
 		fromStatus string
 	}{
-		{outbox.StatusIntaking, outbox.StatusAccepted},
-		{outbox.StatusReady, outbox.StatusIntaking},
-		{outbox.StatusProcessing, outbox.StatusReady},
-		{outbox.StatusSent, outbox.StatusProcessing},
-		{outbox.StatusFailed, outbox.StatusProcessing},
-		{outbox.StatusInvalid, outbox.StatusIntaking},
-		{outbox.StatusCallingSentCallback, outbox.StatusSent},
-		{outbox.StatusCallingFailedCallback, outbox.StatusFailed},
-		{outbox.StatusSentAcknowledged, outbox.StatusCallingSentCallback},
-		{outbox.StatusFailedAcknowledged, outbox.StatusCallingFailedCallback},
+		{StatusIntaking, StatusAccepted},
+		{StatusReady, StatusIntaking},
+		{StatusProcessing, StatusReady},
+		{StatusSent, StatusProcessing},
+		{StatusFailed, StatusProcessing},
+		{StatusInvalid, StatusIntaking},
+		{StatusCallingSentCallback, StatusSent},
+		{StatusCallingFailedCallback, StatusFailed},
+		{StatusSentAcknowledged, StatusCallingSentCallback},
+		{StatusFailedAcknowledged, StatusCallingFailedCallback},
 	}
 
 	for _, tc := range testCases {
@@ -247,7 +245,7 @@ func TestCreate_WhenInsertSucceeds_ShouldReturnNoError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Create(context.TODO(), "test-id", outbox.StatusAccepted, "/path/to/payload")
+	err = sut.Create(context.TODO(), "test-id", StatusAccepted, "/path/to/payload")
 
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())

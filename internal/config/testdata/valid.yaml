@@ -23,10 +23,6 @@ mysql:
 pipeline:
   interval: 3
 
-pipelines:
-  mysql:
-    enabled: true
-
 smtp:
   host: dummy-host
   port: 12345

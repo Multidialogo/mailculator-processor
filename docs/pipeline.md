@@ -73,6 +73,7 @@ Questa pipeline elabora gli email dallo stato SENT.
      - message_ids: array con ID email
      - reason: "Consegnato al server di posta"
    - Invia richiesta HTTP POST all'URL configurato
+   - La richiesta HTTP usa un timeout di 10 secondi
    - Gestisce retry in caso di status 409 (CONFLICT) fino a MaxRetries
    - In caso di successo HTTP 200: aggiorna stato a "SENT-ACKNOWLEDGED"
 3. **Ciclo**: Si ripete ogni intervallo configurato
@@ -91,6 +92,7 @@ Questa pipeline elabora gli email dallo stato FAILED.
      - message_ids: array con ID email
      - reason: motivo dell'errore originale
    - Invia richiesta HTTP POST all'URL configurato
+   - La richiesta HTTP usa un timeout di 10 secondi
    - Gestisce retry in caso di status 409 (CONFLICT) fino a MaxRetries
    - In caso di successo HTTP 200: aggiorna stato a "FAILED-ACKNOWLEDGED"
 3. **Ciclo**: Si ripete ogni intervallo configurato

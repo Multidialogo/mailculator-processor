@@ -41,31 +41,31 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 
 	for _, e := range readyList {
 		wg.Add(1)
-		go func() {
+		go func(outboxEmail outbox.Email) {
 			defer wg.Done()
-			p.logger.Info(fmt.Sprintf("processing outbox %v", e.Id))
-			logger := p.logger.With("outbox", e.Id)
+			p.logger.Info(fmt.Sprintf("processing outbox %v", outboxEmail.Id))
+			logger := p.logger.With("outbox", outboxEmail.Id)
 
-			if err = p.outbox.Update(ctx, e.Id, outbox.StatusProcessing, "", e.TTL); err != nil {
+			if err = p.outbox.Update(ctx, outboxEmail.Id, outbox.StatusProcessing, "", outboxEmail.TTL); err != nil {
 				logger.Warn(fmt.Sprintf("failed to acquire processing lock, error: %v", err))
 				return
 			}
 
-			payload, payloadErr := email.LoadPayload(e.PayloadFilePath)
+			payload, payloadErr := email.LoadPayload(outboxEmail.PayloadFilePath)
 			if payloadErr != nil {
 				logger.Error(fmt.Sprintf("failed to load payload, error: %v", payloadErr))
-				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, payloadErr.Error(), e.TTL)
+				p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, payloadErr.Error(), outboxEmail.TTL)
 				return
 			}
 
 			if err = p.client.Send(payload, p.attachmentsBasePath); err != nil {
 				logger.Error(fmt.Sprintf("failed to send, error: %v", err))
-				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, err.Error(), e.TTL)
+				p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, err.Error(), outboxEmail.TTL)
 			} else {
 				logger.Info("successfully sent")
-				p.handle(context.Background(), logger, e.Id, outbox.StatusSent, "", e.TTL)
+				p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusSent, "", outboxEmail.TTL)
 			}
-		}()
+		}(e)
 	}
 
 	wg.Wait()

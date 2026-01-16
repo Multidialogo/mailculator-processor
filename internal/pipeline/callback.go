@@ -20,6 +20,8 @@ type CallbackConfig struct {
 	Url           string
 }
 
+const defaultCallbackTimeout = 10 * time.Second
+
 type CallbackPipeline struct {
 	outbox             outboxService
 	cfg                CallbackConfig
@@ -40,13 +42,13 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 
 	for _, e := range callbackList {
 		wg.Add(1)
-		go func() {
+		go func(email outbox.Email) {
 			defer wg.Done()
 
-			p.logger.Info(fmt.Sprintf("processing email %v", e.Id))
-			subLogger := p.logger.With("email", e.Id)
+			p.logger.Info(fmt.Sprintf("processing email %v", email.Id))
+			subLogger := p.logger.With("email", email.Id)
 
-			if err = p.outbox.Update(ctx, e.Id, p.processingStatus, e.Reason, e.TTL); err != nil {
+			if err = p.outbox.Update(ctx, email.Id, p.processingStatus, email.Reason, email.TTL); err != nil {
 				subLogger.Warn(fmt.Sprintf("failed to acquire processing lock, error: %v", err))
 				return
 			}
@@ -59,13 +61,13 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				reason = "Consegnato al server di posta"
 			} else {
 				statusCode = "DISPATCH-ERROR"
-				reason = e.Reason
+				reason = email.Reason
 			}
 
 			payload := map[string]any{
 				"code":        statusCode,
-				"reached_at":  e.UpdatedAt,
-				"message_ids": []string{e.Id},
+				"reached_at":  email.UpdatedAt,
+				"message_ids": []string{email.Id},
 				"reason":      reason,
 			}
 
@@ -74,24 +76,25 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				subLogger.Error(fmt.Sprintf("Error during data conversion to JSON: %v", errJson))
 				return
 			}
-			bodyReader := bytes.NewReader(jsonBody)
-
-			req, errReq := http.NewRequest(http.MethodPost, p.cfg.Url, bodyReader)
-			if errReq != nil {
-				subLogger.Error(fmt.Sprintf("Error during request creation: %v", errReq))
-				return
-			}
-
-			// TODO remove non-agnostic headers
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("X-MTRAX-SOURCE", "MULTIDIALOGO")
 
 			// TODO this could be clearer
 			resp := &http.Response{StatusCode: http.StatusConflict}
+			client := &http.Client{Timeout: defaultCallbackTimeout}
 
 			attempt := 0
 			for attempt < p.cfg.MaxRetries && resp.StatusCode == http.StatusConflict {
-				resp, err = http.DefaultClient.Do(req)
+				bodyReader := bytes.NewReader(jsonBody)
+				req, errReq := http.NewRequest(http.MethodPost, p.cfg.Url, bodyReader)
+				if errReq != nil {
+					subLogger.Error(fmt.Sprintf("Error during request creation: %v", errReq))
+					return
+				}
+
+				// TODO remove non-agnostic headers
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("X-MTRAX-SOURCE", "MULTIDIALOGO")
+
+				resp, err = client.Do(req)
 				if err != nil {
 					subLogger.Error(fmt.Sprintf("Error in the request: %v", err))
 					return
@@ -113,12 +116,21 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 						resp.StatusCode, retryMsg, attempt, p.cfg.MaxRetries,
 					))
 
-					time.Sleep(retryInterval)
+					if attempt < p.cfg.MaxRetries {
+						if resp.Body != nil {
+							_ = resp.Body.Close()
+						}
+						time.Sleep(retryInterval)
+					}
 				}
 			}
 
 			if attempt == p.cfg.MaxRetries {
 				subLogger.Error(fmt.Sprintf("Max retries exceeded for the url %s", p.cfg.Url))
+			}
+
+			if resp.Body != nil {
+				defer resp.Body.Close()
 			}
 
 			if resp.StatusCode != http.StatusOK {
@@ -132,10 +144,10 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				subLogger.Info("callback successfully processed")
 			}
 
-			if err = p.outbox.Update(context.Background(), e.Id, p.acknowledgedStatus, e.Reason, e.TTL); err != nil {
+			if err = p.outbox.Update(context.Background(), email.Id, p.acknowledgedStatus, email.Reason, email.TTL); err != nil {
 				subLogger.Error(fmt.Sprintf("error while updating status after callback, error: %v", err))
 			}
-		}()
+		}(e)
 	}
 
 	wg.Wait()

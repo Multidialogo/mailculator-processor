@@ -40,10 +40,6 @@ func createTestPayloadFile(t *testing.T, payload email.Payload) string {
 	return tmpFile.Name()
 }
 
-func int64Ptr(value int64) *int64 {
-	return &value
-}
-
 func TestSuccessfulIntake(t *testing.T) {
 	payload := email.Payload{
 		Id:       "550e8400-e29b-41d4-a716-446655440000",
@@ -62,7 +58,6 @@ func TestSuccessfulIntake(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             int64Ptr(1234567890),
 		}),
 	)
 
@@ -106,7 +101,6 @@ func TestIntakeUpdateError(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             int64Ptr(1234567890),
 		}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 	)
@@ -128,7 +122,6 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: "/nonexistent/file.json",
-			TTL:             int64Ptr(1234567890),
 		}),
 	)
 
@@ -157,7 +150,6 @@ func TestIntakeInvalidJSON(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: tmpFile.Name(),
-			TTL:             int64Ptr(1234567890),
 		}),
 	)
 
@@ -186,7 +178,6 @@ func TestIntakeValidationError(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             int64Ptr(1234567890),
 		}),
 	)
 

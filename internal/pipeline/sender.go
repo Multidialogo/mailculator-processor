@@ -4,25 +4,29 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"mailculator-processor/internal/outbox"
 	"sync"
+
+	"mailculator-processor/internal/email"
+	"mailculator-processor/internal/outbox"
 )
 
 type clientService interface {
-	Send(emlFilePath string) error
+	Send(payload email.Payload, attachmentsBasePath string) error
 }
 
 type MainSenderPipeline struct {
-	outbox outboxService
-	client clientService
-	logger *slog.Logger
+	outbox              outboxService
+	client              clientService
+	attachmentsBasePath string
+	logger              *slog.Logger
 }
 
-func NewMainSenderPipeline(outbox outboxService, client clientService) *MainSenderPipeline {
+func NewMainSenderPipeline(outbox outboxService, client clientService, attachmentsBasePath string) *MainSenderPipeline {
 	return &MainSenderPipeline{
-		outbox: outbox,
-		client: client,
-		logger: slog.With("pipe", "main"),
+		outbox:              outbox,
+		client:              client,
+		attachmentsBasePath: attachmentsBasePath,
+		logger:              slog.With("pipe", "main"),
 	}
 }
 
@@ -47,7 +51,14 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 				return
 			}
 
-			if err = p.client.Send(e.EmlFilePath); err != nil {
+			payload, payloadErr := email.LoadPayload(e.PayloadFilePath)
+			if payloadErr != nil {
+				logger.Error(fmt.Sprintf("failed to load payload, error: %v", payloadErr))
+				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, payloadErr.Error(), e.TTL)
+				return
+			}
+
+			if err = p.client.Send(payload, p.attachmentsBasePath); err != nil {
 				logger.Error(fmt.Sprintf("failed to send, error: %v", err))
 				p.handle(context.Background(), logger, e.Id, outbox.StatusFailed, err.Error(), e.TTL)
 			} else {

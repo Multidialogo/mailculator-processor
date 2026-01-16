@@ -33,7 +33,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 
 ### Storage
 - **MySQL (RDS/MariaDB)**: Database principale per metadati degli email
-- **EFS**: Storage per file email (.eml)
+- **EFS**: Storage per payload e allegati (filesystem condiviso)
 
 ### Networking & Security
 - **Secrets Manager**: Gestione credenziali SMTP

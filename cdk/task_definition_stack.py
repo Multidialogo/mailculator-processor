@@ -13,7 +13,6 @@ from constructs import Construct
 from multidialogo_cdk_shared.environment_secrets_resolver import EnvironmentSecretsResolver
 
 MD_REST_VOLUME_NAME = 'rest-volume'
-MC_VOLUME_NAME = 'mc-volume'
 
 MULTICARRIER_EMAIL_ID = 'multicarrier-email'
 
@@ -39,15 +38,11 @@ class TaskDefinitionStack(Stack):
         service_name = env_parameters['SERVICE_NAME']
         selected_environment = env_parameters['SELECTED_ENVIRONMENT']
         md_rest_efs_folder_name = env_parameters['MD_REST_EFS_FOLDER_NAME']
-        mc_email_efs_folder_name = env_parameters['MC_EMAIL_EFS_FOLDER_NAME']
         service_cpu = env_parameters['SERVICE_CPU']
         service_memory = env_parameters['SERVICE_MEMORY']
         service_container_port = env_parameters['SERVICE_CONTAINER_PORT']
         service_host_port = env_parameters['SERVICE_HOST_PORT']
 
-        mc_eml_efs_access_point_arn_parameter_name = env_parameters['MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME']
-        mc_eml_efs_access_point_id_parameter_name = env_parameters['MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME']
-        mc_eml_efs_id_parameter_name = env_parameters['MC_EML_EFS_ID_PARAMETER_NAME']
         repository_name_parameter_name = env_parameters['REPOSITORY_NAME_PARAMETER_NAME']
         md_rest_efs_id_parameter_name = env_parameters['MD_REST_EFS_ID_PARAMETER_NAME']
         md_rest_access_point_arn_parameter_name = env_parameters['MD_REST_ACCESS_POINT_ARN_PARAMETER_NAME']
@@ -92,34 +87,6 @@ class TaskDefinitionStack(Stack):
                 ],
                 resources=[
                     md_rest_access_point_arn
-                ]
-            )
-        )
-
-        mc_eml_access_point_arn = ssm.StringParameter.value_from_lookup(
-            scope=self,
-            parameter_name=mc_eml_efs_access_point_arn_parameter_name,
-        )
-
-        mc_eml_access_point_id = ssm.StringParameter.value_from_lookup(
-            scope=self,
-            parameter_name=mc_eml_efs_access_point_id_parameter_name,
-        )
-
-        mc_email_efs_id = ssm.StringParameter.value_from_lookup(
-            scope=self,
-            parameter_name=mc_eml_efs_id_parameter_name,
-        )
-
-        task_definition.add_to_execution_role_policy(
-            statement=iam.PolicyStatement(
-                actions=[
-                    'elasticfilesystem:ClientMount',
-                    'elasticfilesystem:ClientWrite',
-                    'elasticfilesystem:ClientRootAccess'
-                ],
-                resources=[
-                    mc_eml_access_point_arn
                 ]
             )
         )
@@ -211,28 +178,11 @@ class TaskDefinitionStack(Stack):
             )
         )
 
-        task_definition.add_volume(
-            name=MC_VOLUME_NAME,
-            efs_volume_configuration=ecs.EfsVolumeConfiguration(
-                file_system_id=mc_email_efs_id,
-                transit_encryption='ENABLED',
-                authorization_config=ecs.AuthorizationConfig(
-                    access_point_id=mc_eml_access_point_id,
-                    iam='ENABLED'
-                )
-            )
-        )
-
         container.add_mount_points(
             ecs.MountPoint(
                 container_path=md_rest_efs_folder_name,
                 source_volume=MD_REST_VOLUME_NAME,
                 read_only=True
-            ),
-            ecs.MountPoint(
-                container_path=mc_email_efs_folder_name,
-                source_volume=MC_VOLUME_NAME,
-                read_only=False
             )
         )
 
@@ -293,11 +243,6 @@ class TaskDefinitionStack(Stack):
         container.add_environment(
             name='ATTACHMENTS_BASE_PATH',
             value=md_rest_efs_folder_name
-        )
-
-        container.add_environment(
-            name='EML_STORAGE_PATH',
-            value=mc_email_efs_folder_name + "/emls"
         )
 
         callback_endpoint = ssm.StringParameter.value_from_lookup(

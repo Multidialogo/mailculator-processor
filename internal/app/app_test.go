@@ -49,10 +49,6 @@ func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
 	}
 }
 
-func (cp *configProviderMock) GetEmlStoragePath() string {
-	return "/efs/eml"
-}
-
 func (cp *configProviderMock) GetAttachmentsBasePath() string {
 	return "/base/attachments/path/"
 }

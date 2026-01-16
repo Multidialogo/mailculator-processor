@@ -1,6 +1,7 @@
-package eml
+package smtp
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -14,24 +15,94 @@ import (
 	"time"
 
 	"github.com/h2non/filetype"
+
+	"mailculator-processor/internal/email"
 )
 
-type EML struct {
-	MessageId     string
-	From          string
-	ReplyTo       string
-	To            string
-	Subject       string
-	BodyHTML      string
-	BodyText      string
-	Date          time.Time
-	Attachments   []string
-	CustomHeaders map[string]string
+type MessageBuilder struct{}
+
+func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string) ([]byte, error) {
+	msg := &mail.Message{}
+	b.addStandardHeadersToMessage(msg, payload)
+
+	orderedStandardHeaders := []string{"From", "Reply-To", "To", "Date", "Subject", "Content-Type"}
+	var buf bytes.Buffer
+
+	for _, key := range orderedStandardHeaders {
+		if values, exists := msg.Header[key]; exists {
+			for _, value := range values {
+				if err := b.writeFoldedHeader(&buf, key, value); err != nil {
+					return nil, fmt.Errorf("failed to write header %s: %w", key, err)
+				}
+			}
+		}
+	}
+
+	for key, values := range msg.Header {
+		if b.isHeaderInList(orderedStandardHeaders, key) {
+			continue
+		}
+
+		for _, value := range values {
+			if err := b.writeFoldedHeader(&buf, key, value); err != nil {
+				return nil, fmt.Errorf("failed to write custom header %s: %w", key, err)
+			}
+		}
+	}
+
+	if _, err := buf.Write([]byte("\r\n")); err != nil {
+		return nil, fmt.Errorf("failed to write newline after custom headers: %w", err)
+	}
+
+	multipartWriter := multipart.NewWriter(&buf)
+	if err := multipartWriter.SetBoundary(payload.Id); err != nil {
+		return nil, fmt.Errorf("failed to write multipart boundary: %w", err)
+	}
+
+	if payload.BodyText != "" {
+		if err := b.writePart(multipartWriter, "text/plain", "charset=utf-8", payload.BodyText); err != nil {
+			return nil, err
+		}
+	}
+
+	if payload.BodyHTML != "" {
+		if err := b.writePart(multipartWriter, "text/html", "charset=utf-8", payload.BodyHTML); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, attachment := range b.resolveAttachments(payload.Attachments, attachmentsBasePath) {
+		attachmentData, err := os.ReadFile(attachment)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read attachment: %w", err)
+		}
+
+		if err = b.writeAttachment(&buf, payload.Id, attachment, attachmentData); err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := buf.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", payload.Id))); err != nil {
+		return nil, fmt.Errorf("failed to write final boundary: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
-type Writer struct{}
+func (b *MessageBuilder) resolveAttachments(attachments []string, basePath string) []string {
+	if len(attachments) == 0 {
+		return nil
+	}
 
-func (w *Writer) addStandardHeadersToMessage(msg *mail.Message, data EML) {
+	attachmentsWithBasePath := make([]string, len(attachments))
+	for i, attachment := range attachments {
+		attachmentsWithBasePath[i] = basePath + attachment
+	}
+
+	return attachmentsWithBasePath
+}
+
+func (b *MessageBuilder) addStandardHeadersToMessage(msg *mail.Message, data email.Payload) {
 	msg.Header = make(mail.Header)
 	msg.Header["From"] = []string{data.From}
 
@@ -40,16 +111,16 @@ func (w *Writer) addStandardHeadersToMessage(msg *mail.Message, data EML) {
 	}
 
 	msg.Header["To"] = []string{data.To}
-	msg.Header["Date"] = []string{data.Date.Format(time.RFC1123Z)}
+	msg.Header["Date"] = []string{time.Now().Format(time.RFC1123Z)}
 	msg.Header["Subject"] = []string{data.Subject}
-	msg.Header["Content-Type"] = []string{fmt.Sprintf("multipart/mixed; boundary=\"%s\"", data.MessageId)}
+	msg.Header["Content-Type"] = []string{fmt.Sprintf("multipart/mixed; boundary=\"%s\"", data.Id)}
 
 	for key, value := range data.CustomHeaders {
 		msg.Header[key] = []string{value}
 	}
 }
 
-func (w *Writer) writePart(multipartWriter *multipart.Writer, contentType, charset, body string) error {
+func (b *MessageBuilder) writePart(multipartWriter *multipart.Writer, contentType, charset, body string) error {
 	headers := textproto.MIMEHeader{
 		"Content-Type":              []string{fmt.Sprintf("%s; %s", contentType, charset)},
 		"Content-Transfer-Encoding": []string{"quoted-printable"},
@@ -61,17 +132,14 @@ func (w *Writer) writePart(multipartWriter *multipart.Writer, contentType, chars
 	}
 
 	writer := quotedprintable.NewWriter(part)
-
 	if _, err = writer.Write([]byte(body)); err != nil {
 		return fmt.Errorf("failed to write part body: %w", err)
 	}
 
-	// Close the writer explicitly to flush any buffered data
 	if err := writer.Close(); err != nil {
 		return fmt.Errorf("failed to close quoted-printable writer: %w", err)
 	}
 
-	// Ensure a blank line after the part content for proper MIME formatting
 	if _, err = part.Write([]byte("\r\n")); err != nil {
 		return fmt.Errorf("failed to write blank line after part: %w", err)
 	}
@@ -79,7 +147,7 @@ func (w *Writer) writePart(multipartWriter *multipart.Writer, contentType, chars
 	return nil
 }
 
-func (w *Writer) detectFileMimeFromKnownExtension(extension string) string {
+func (b *MessageBuilder) detectFileMimeFromKnownExtension(extension string) string {
 	switch strings.ToLower(extension) {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
@@ -94,7 +162,7 @@ func (w *Writer) detectFileMimeFromKnownExtension(extension string) string {
 	}
 }
 
-func (w *Writer) detectFileMime(path string) (string, error) {
+func (b *MessageBuilder) detectFileMime(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("error opening file: %w", err)
@@ -109,14 +177,12 @@ func (w *Writer) detectFileMime(path string) (string, error) {
 
 	kind, _ := filetype.Match(buffer)
 	if kind == filetype.Unknown {
-		return w.detectFileMimeFromKnownExtension(filepath.Ext(path)), nil
+		return b.detectFileMimeFromKnownExtension(filepath.Ext(path)), nil
 	}
 
 	return kind.MIME.Value, nil
 }
 
-// lineBreakWriter wraps an io.Writer and inserts line breaks every N characters
-// This is needed for RFC 2045 compliance (base64 lines must be max 76 chars)
 type lineBreakWriter struct {
 	w           io.Writer
 	lineLength  int
@@ -132,7 +198,6 @@ func newLineBreakWriter(w io.Writer, lineLength int) *lineBreakWriter {
 
 func (lbw *lineBreakWriter) Write(p []byte) (n int, err error) {
 	for len(p) > 0 {
-		// Check if we need to start a new line
 		if lbw.currentLine >= lbw.lineLength {
 			if _, err := lbw.w.Write([]byte("\r\n")); err != nil {
 				return n, err
@@ -140,14 +205,12 @@ func (lbw *lineBreakWriter) Write(p []byte) (n int, err error) {
 			lbw.currentLine = 0
 		}
 
-		// Calculate how much we can write on this line
 		remaining := lbw.lineLength - lbw.currentLine
 		toWrite := remaining
 		if toWrite > len(p) {
 			toWrite = len(p)
 		}
 
-		// Write the data
 		written, err := lbw.w.Write(p[:toWrite])
 		n += written
 		lbw.currentLine += written
@@ -160,37 +223,33 @@ func (lbw *lineBreakWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func (w *Writer) writeAttachment(target io.Writer, boundary string, path string, data []byte) error {
-	mimeType, err := w.detectFileMime(path)
+func (b *MessageBuilder) writeAttachment(target io.Writer, boundary string, path string, data []byte) error {
+	mimeType, err := b.detectFileMime(path)
 	if err != nil {
 		return fmt.Errorf("failed to detect file mime type: %w", err)
 	}
 
-	// Write boundary
 	if _, err := target.Write([]byte(fmt.Sprintf("--%s\r\n", boundary))); err != nil {
 		return fmt.Errorf("failed to write boundary: %w", err)
 	}
 
-	// Write headers with proper MIME folding
 	contentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path))
-	if err := w.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
+	if err := b.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
 		return fmt.Errorf("failed to write Content-Disposition header: %w", err)
 	}
 
-	if err := w.writeFoldedHeader(target, "Content-Type", mimeType); err != nil {
+	if err := b.writeFoldedHeader(target, "Content-Type", mimeType); err != nil {
 		return fmt.Errorf("failed to write Content-Type header: %w", err)
 	}
 
-	if err := w.writeFoldedHeader(target, "Content-Transfer-Encoding", "base64"); err != nil {
+	if err := b.writeFoldedHeader(target, "Content-Transfer-Encoding", "base64"); err != nil {
 		return fmt.Errorf("failed to write Content-Transfer-Encoding header: %w", err)
 	}
 
-	// Write blank line after headers
 	if _, err := target.Write([]byte("\r\n")); err != nil {
 		return fmt.Errorf("failed to write newline after attachment headers: %w", err)
 	}
 
-	// Write base64 encoded data with line breaks every 76 characters (RFC 2045)
 	lineBreaker := newLineBreakWriter(target, 76)
 	base64Encoder := base64.NewEncoder(base64.StdEncoding, lineBreaker)
 
@@ -198,12 +257,10 @@ func (w *Writer) writeAttachment(target io.Writer, boundary string, path string,
 		return fmt.Errorf("failed to write attachment data: %w", err)
 	}
 
-	// Close the encoder explicitly to flush any buffered data
 	if err := base64Encoder.Close(); err != nil {
 		return fmt.Errorf("failed to close base64 encoder: %w", err)
 	}
 
-	// Ensure a blank line after the attachment content for proper MIME formatting
 	if _, err := target.Write([]byte("\r\n")); err != nil {
 		return fmt.Errorf("failed to write blank line after attachment: %w", err)
 	}
@@ -211,7 +268,7 @@ func (w *Writer) writeAttachment(target io.Writer, boundary string, path string,
 	return nil
 }
 
-func (w *Writer) isHeaderInList(slice []string, item string) bool {
+func (b *MessageBuilder) isHeaderInList(slice []string, item string) bool {
 	for _, element := range slice {
 		if element == item {
 			return true
@@ -220,11 +277,7 @@ func (w *Writer) isHeaderInList(slice []string, item string) bool {
 	return false
 }
 
-// canFoldHeader checks if a header can be folded
-// While RFC 5322 allows folding for all headers, we conservatively avoid
-// folding headers that contain email addresses to prevent SMTP compatibility issues
-func (w *Writer) canFoldHeader(key string) bool {
-	// Headers containing email addresses should NOT be folded for SMTP compatibility
+func (b *MessageBuilder) canFoldHeader(key string) bool {
 	emailHeaders := []string{
 		"From", "To", "Cc", "Bcc", "Reply-To", "Sender",
 		"Resent-From", "Resent-To", "Resent-Cc", "Resent-Bcc", "Resent-Sender",
@@ -236,7 +289,6 @@ func (w *Writer) canFoldHeader(key string) bool {
 		}
 	}
 
-	// Structured MIME headers should also not be folded for compatibility
 	mimeHeaders := []string{
 		"Content-Type", "Content-Disposition", "Content-Transfer-Encoding",
 		"Content-ID", "Content-Description",
@@ -248,20 +300,15 @@ func (w *Writer) canFoldHeader(key string) bool {
 		}
 	}
 
-	// Other headers like Subject, Date, Message-Id can be folded
 	return true
 }
 
-// writeFoldedHeader writes a header line with proper MIME folding (max 76 characters per line)
-func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
+func (b *MessageBuilder) writeFoldedHeader(target io.Writer, key, value string) error {
 	headerLine := fmt.Sprintf("%s: %s\r\n", key, value)
 
-	// For headers that should not be folded (email addresses, structured headers)
-	if !w.canFoldHeader(key) {
-		// Ensure they don't exceed reasonable limits to avoid SMTP server rejections
+	if !b.canFoldHeader(key) {
 		if len(headerLine) > 998 {
-			// Truncate the value if too long, keeping the header name
-			maxValueLen := 998 - len(key) - 2 // -2 for ": "
+			maxValueLen := 998 - len(key) - 2
 			if maxValueLen > 0 {
 				value = value[:maxValueLen]
 				headerLine = fmt.Sprintf("%s: %s\r\n", key, value)
@@ -271,28 +318,23 @@ func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
 		return err
 	}
 
-	// For foldable headers, ensure they don't exceed RFC 5322 line limit
 	if len(headerLine) > 998 {
-		// Truncate the value if too long, keeping the header name
-		maxValueLen := 998 - len(key) - 2 // -2 for ": "
+		maxValueLen := 998 - len(key) - 2
 		if maxValueLen > 0 {
 			value = value[:maxValueLen]
 			headerLine = fmt.Sprintf("%s: %s\r\n", key, value)
 		}
 	}
 
-	// If the header line fits within 76 characters, write it directly
 	if len(headerLine) <= 76 {
 		_, err := target.Write([]byte(headerLine))
 		return err
 	}
 
-	// Fold the header: write the first part, then continue with space
 	firstLine := headerLine[:76]
 	if !strings.Contains(firstLine, "\r\n") {
-		// Find the last space before position 76 to break nicely
 		lastSpace := strings.LastIndex(headerLine[:76], " ")
-		if lastSpace > len(key)+2 { // Make sure we don't break in the header name
+		if lastSpace > len(key)+2 {
 			firstLine = headerLine[:lastSpace]
 		}
 	}
@@ -302,16 +344,14 @@ func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
 		return err
 	}
 
-	// Write continuation lines with leading space
 	remaining := headerLine[len(firstLine):]
 	for len(remaining) > 0 {
-		if len(remaining) <= 75 { // 75 because we add a space at the beginning
+		if len(remaining) <= 75 {
 			_, err = target.Write([]byte(" " + remaining))
 			return err
 		}
 
-		// Find break point for continuation
-		breakPoint := 74 // Leave room for space + potential line ending
+		breakPoint := 74
 		if breakPoint > len(remaining) {
 			breakPoint = len(remaining)
 		}
@@ -327,76 +367,6 @@ func (w *Writer) writeFoldedHeader(target io.Writer, key, value string) error {
 			return err
 		}
 		remaining = remaining[breakPoint:]
-	}
-
-	return nil
-}
-
-func (w *Writer) Write(target io.Writer, data EML) error {
-	msg := &mail.Message{}
-	w.addStandardHeadersToMessage(msg, data)
-
-	orderedStandardHeaders := []string{"From", "Reply-To", "To", "Date", "Subject", "Content-Type"}
-
-	// Write standard headers with folding
-	for _, key := range orderedStandardHeaders {
-		if values, exists := msg.Header[key]; exists {
-			for _, value := range values {
-				if err := w.writeFoldedHeader(target, key, value); err != nil {
-					return fmt.Errorf("failed to write header %s: %w", key, err)
-				}
-			}
-		}
-	}
-
-	// Write custom headers with folding
-	for key, values := range msg.Header {
-		if w.isHeaderInList(orderedStandardHeaders, key) {
-			continue
-		}
-
-		for _, value := range values {
-			if err := w.writeFoldedHeader(target, key, value); err != nil {
-				return fmt.Errorf("failed to write custom header %s: %w", key, err)
-			}
-		}
-	}
-
-	if _, err := target.Write([]byte("\r\n")); err != nil {
-		return fmt.Errorf("failed to write newline after custom headers: %w", err)
-	}
-
-	multipartWriter := multipart.NewWriter(target)
-	if err := multipartWriter.SetBoundary(data.MessageId); err != nil {
-		return fmt.Errorf("failed to write multipart boundary: %w", err)
-	}
-
-	if data.BodyText != "" {
-		if err := w.writePart(multipartWriter, "text/plain", "charset=utf-8", data.BodyText); err != nil {
-			return err
-		}
-	}
-
-	if data.BodyHTML != "" {
-		if err := w.writePart(multipartWriter, "text/html", "charset=utf-8", data.BodyHTML); err != nil {
-			return err
-		}
-	}
-
-	for _, attachment := range data.Attachments {
-		attachmentData, err := os.ReadFile(attachment)
-		if err != nil {
-			return fmt.Errorf("failed to read attachment: %w", err)
-		}
-
-		if err = w.writeAttachment(target, data.MessageId, attachment, attachmentData); err != nil {
-			return err
-		}
-	}
-
-	// Write final boundary
-	if _, err := target.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", data.MessageId))); err != nil {
-		return fmt.Errorf("failed to write final boundary: %w", err)
 	}
 
 	return nil

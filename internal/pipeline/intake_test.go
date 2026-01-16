@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -42,24 +41,28 @@ func (m *emlStorageMock) Store(emlData eml.EML) (string, error) {
 
 func createTestPayloadFile(t *testing.T, payload EmailPayload) string {
 	t.Helper()
-	
+
 	tmpFile, err := os.CreateTemp("", "payload-*.json")
 	require.NoError(t, err)
-	
+
 	t.Cleanup(func() {
 		os.Remove(tmpFile.Name())
 	})
-	
+
 	data, err := json.Marshal(payload)
 	require.NoError(t, err)
-	
+
 	_, err = tmpFile.Write(data)
 	require.NoError(t, err)
-	
+
 	err = tmpFile.Close()
 	require.NoError(t, err)
-	
+
 	return tmpFile.Name()
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
 }
 
 func TestSuccessfulIntake(t *testing.T) {
@@ -72,26 +75,26 @@ func TestSuccessfulIntake(t *testing.T) {
 		BodyHTML: "<html><body>Test</body></html>",
 		BodyText: "Test",
 	}
-	
+
 	payloadFile := createTestPayloadFile(t, payload)
-	
+
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	buf, logger := mocks.NewLoggerMock()
-	
+
 	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 1, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=INFO msg=\"processing outbox 1\"")
 	assert.Contains(t, buf.String(), "level=INFO msg=\"successfully intaken\" outbox=1")
@@ -101,11 +104,11 @@ func TestIntakeQueryError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(mocks.QueryMethodError(errors.New("some query error")))
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
-	
+
 	intake := IntakePipeline{outboxServiceMock, emlStorageMock, "/base/path/", logger, nil}
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Equal(t, "level=ERROR msg=\"error while querying emails to process: some query error\"", strings.TrimSpace(buf.String()))
 }
@@ -119,25 +122,25 @@ func TestIntakeUpdateError(t *testing.T) {
 		Subject:  "Test Subject",
 		BodyHTML: "<html><body>Test</body></html>",
 	}
-	
+
 	payloadFile := createTestPayloadFile(t, payload)
-	
+
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 		mocks.UpdateMethodError(errors.New("some update error")),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	intake := IntakePipeline{outboxServiceMock, emlStorageMock, "/base/path/", logger, nil}
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Equal(t,
 		"level=INFO msg=\"processing outbox 1\"\nlevel=WARN msg=\"failed to acquire processing lock, error: some update error\" outbox=1",
@@ -152,16 +155,16 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: "/nonexistent/file.json",
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=INFO msg=\"processing outbox 1\"")
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
@@ -172,27 +175,27 @@ func TestIntakeInvalidJSON(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "payload-*.json")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
-	
+
 	_, err = tmpFile.WriteString("invalid json content")
 	require.NoError(t, err)
 	tmpFile.Close()
-	
+
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: tmpFile.Name(),
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "failed to unmarshal payload")
@@ -205,25 +208,25 @@ func TestIntakeValidationError(t *testing.T) {
 		From:    "not-an-email",
 		Subject: "Test",
 	}
-	
+
 	payloadFile := createTestPayloadFile(t, payload)
-	
+
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(nil, "/path/to/eml/file.eml")
 	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "payload validation failed")
@@ -238,27 +241,26 @@ func TestIntakeStorageError(t *testing.T) {
 		Subject:  "Test Subject",
 		BodyHTML: "<html><body>Test</body></html>",
 	}
-	
+
 	payloadFile := createTestPayloadFile(t, payload)
-	
+
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{
 			Id:              "1",
 			Status:          outbox.StatusAccepted,
 			PayloadFilePath: payloadFile,
-			TTL:             aws.Int64(1234567890),
+			TTL:             int64Ptr(1234567890),
 		}),
 	)
-	
+
 	emlStorageMock := newEmlStorageMock(errors.New("storage error"), "")
 	intake := NewIntakePipeline(outboxServiceMock, emlStorageMock, "/base/path/")
 	intake.logger = logger
-	
+
 	intake.Process(context.TODO())
-	
+
 	assert.Equal(t, 0, emlStorageMock.storeMethodCounter)
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to create and store EML")
 	assert.Contains(t, buf.String(), "failed to store EML")
 }
-

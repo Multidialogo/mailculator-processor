@@ -1,24 +1,5 @@
 # Gestione Errori e Retry
 
-## Retry DynamoDB
-
-### Condizioni di Retry
-Il sistema effettua retry automatico per le seguenti eccezioni DynamoDB:
-- `TransactionCanceledException` con codice `TransactionConflict`
-- `ProvisionedThroughputExceededException`
-- `InternalServerError`
-- `ResourceInUseException`
-- `RequestLimitExceeded`
-- `TransactionInProgressException`
-- API errors con codici: `ThrottlingException`, `Throttling`, `RequestLimitExceeded`, `ServiceUnavailable`
-
-### Backoff Strategy
-- **Max Attempts**: 8 tentativi
-- **Base Delay**: 30 millisecondi
-- **Max Delay**: 1 secondo
-- **Formula**: Durata casuale tra 0 e min(2^attempt * base_delay, max_delay)
-
-
 ## Retry MySQL
 
 ### Condizioni di Retry

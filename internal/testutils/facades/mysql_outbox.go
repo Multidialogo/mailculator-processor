@@ -124,6 +124,32 @@ func (f *MySQLOutboxFacade) AddEmailWithStatus(ctx context.Context, status strin
 	return id, nil
 }
 
+func (f *MySQLOutboxFacade) AddEmailWithPayload(ctx context.Context, status string, payloadFilePath string) (string, error) {
+	if payloadFilePath == "" {
+		return "", fmt.Errorf("payload file path is required")
+	}
+
+	id := uuid.NewString()
+
+	query := `
+		INSERT INTO emails (id, status, payload_file_path)
+		VALUES (?, ?, ?)
+	`
+
+	_, err := f.db.ExecContext(ctx, query, id, status, payloadFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert email: %w", err)
+	}
+
+	historyQuery := `
+		INSERT INTO email_statuses (email_id, status, reason)
+		VALUES (?, ?, ?)
+	`
+	_, _ = f.db.ExecContext(ctx, historyQuery, id, status, "test fixture")
+
+	return id, nil
+}
+
 func (f *MySQLOutboxFacade) DeleteEmail(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("id is required")

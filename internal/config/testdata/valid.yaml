@@ -20,15 +20,10 @@ mysql:
   password: "test"
   database: "mailculator_test"
 
-outbox:
-  table-name: "Outbox"
-
 pipeline:
   interval: 3
 
 pipelines:
-  dynamodb:
-    enabled: true
   mysql:
     enabled: true
 

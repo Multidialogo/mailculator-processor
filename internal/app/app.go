@@ -8,14 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	_ "github.com/go-sql-driver/mysql"
 
 	"mailculator-processor/internal/eml"
 	"mailculator-processor/internal/healthcheck"
 	"mailculator-processor/internal/mysql_outbox"
-	"mailculator-processor/internal/outbox"
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
@@ -32,20 +29,23 @@ type App struct {
 }
 
 type configProvider interface {
-	GetAwsConfig() aws.Config
 	GetHealthCheckServerPort() int
 	GetPipelineInterval() int
 	GetCallbackConfig() pipeline.CallbackConfig
-	GetOutboxTableName() string
 	GetSmtpConfig() smtp.Config
 	GetEmlStoragePath() string
 	GetAttachmentsBasePath() string
 	GetMySQLDSN() string
-	DynamoDBPipelinesEnabled() bool
 	MySQLPipelinesEnabled() bool
 }
 
+type mysqlOpener func(driverName, dsn string) (*sql.DB, error)
+
 func New(cp configProvider) (*App, error) {
+	return NewWithMySQLOpener(cp, sql.Open)
+}
+
+func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 	client := smtp.New(cp.GetSmtpConfig())
 	emlStorage := eml.NewEMLStorage(cp.GetEmlStoragePath())
 	callbackConfig := cp.GetCallbackConfig()
@@ -53,21 +53,6 @@ func New(cp configProvider) (*App, error) {
 
 	var pipes []pipelineProcessor
 	var mysqlDB *sql.DB
-
-	// Create DynamoDB pipelines if enabled
-	if cp.DynamoDBPipelinesEnabled() {
-		slog.Info("DynamoDB pipelines enabled, initializing...")
-		db := dynamodb.NewFromConfig(cp.GetAwsConfig())
-		dynamoOutbox := outbox.NewOutbox(db, cp.GetOutboxTableName())
-
-		pipes = append(pipes,
-			pipeline.NewIntakePipeline(dynamoOutbox, emlStorage, cp.GetAttachmentsBasePath()),
-			pipeline.NewMainSenderPipeline(dynamoOutbox, client),
-			pipeline.NewSentCallbackPipeline(dynamoOutbox, callbackConfig),
-			pipeline.NewFailedCallbackPipeline(dynamoOutbox, callbackConfig),
-		)
-		slog.Info("DynamoDB pipelines initialized", "count", 4)
-	}
 
 	// Create MySQL pipelines if enabled
 	if cp.MySQLPipelinesEnabled() {
@@ -78,7 +63,7 @@ func New(cp configProvider) (*App, error) {
 
 		slog.Info("MySQL pipelines enabled, initializing...")
 		var err error
-		mysqlDB, err = sql.Open("mysql", dsn)
+		mysqlDB, err = opener("mysql", dsn)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open MySQL connection: %w", err)
 		}
@@ -105,7 +90,7 @@ func New(cp configProvider) (*App, error) {
 	}
 
 	if len(pipes) == 0 {
-		return nil, fmt.Errorf("no pipelines enabled, at least one of DynamoDB or MySQL must be enabled")
+		return nil, fmt.Errorf("no pipelines enabled, MySQL pipelines must be enabled")
 	}
 
 	slog.Info("App initialized", "total_pipelines", len(pipes))

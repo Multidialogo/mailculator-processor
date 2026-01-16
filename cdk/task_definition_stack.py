@@ -2,7 +2,6 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_logs as logs,
     aws_iam as iam,
-    aws_dynamodb as dynamodb,
     aws_ssm as ssm,
     aws_ecr as ecr,
     aws_secretsmanager as secretsmanager,
@@ -46,7 +45,6 @@ class TaskDefinitionStack(Stack):
         service_container_port = env_parameters['SERVICE_CONTAINER_PORT']
         service_host_port = env_parameters['SERVICE_HOST_PORT']
 
-        outbox_table_name_parameter_name = env_parameters['OUTBOX_TABLE_NAME_PARAMETER_NAME']
         mc_eml_efs_access_point_arn_parameter_name = env_parameters['MC_EML_EFS_ACCESS_POINT_ARN_PARAMETER_NAME']
         mc_eml_efs_access_point_id_parameter_name = env_parameters['MC_EML_EFS_ACCESS_POINT_ID_PARAMETER_NAME']
         mc_eml_efs_id_parameter_name = env_parameters['MC_EML_EFS_ID_PARAMETER_NAME']
@@ -292,40 +290,6 @@ class TaskDefinitionStack(Stack):
             value='true'
         )
 
-        table_name = ssm.StringParameter.value_from_lookup(
-            scope=self,
-            parameter_name=outbox_table_name_parameter_name
-        )
-
-        table = dynamodb.Table.from_table_name(
-            scope=self,
-            id='table',
-            table_name=table_name
-        )
-
-        table.grant_read_write_data(
-            grantee=task_definition.task_role
-        )
-
-        table.grant(
-            task_definition.task_role,
-            'dynamodb:PartiQLSelect',
-            'dynamodb:PartiQLInsert',
-            'dynamodb:PartiQLUpdate',
-            'dynamodb:PartiQLDelete'
-        )
-
-        task_definition.add_to_task_role_policy(
-            statement=iam.PolicyStatement(
-                actions=[
-                    'dynamodb:PartiQLSelect'
-                ],
-                resources=[
-                    f'{table.table_arn}/index/*'
-                ]
-            )
-        )
-
         container.add_environment(
             name='ATTACHMENTS_BASE_PATH',
             value=md_rest_efs_folder_name
@@ -334,11 +298,6 @@ class TaskDefinitionStack(Stack):
         container.add_environment(
             name='EML_STORAGE_PATH',
             value=mc_email_efs_folder_name + "/emls"
-        )
-
-        container.add_environment(
-            name='EMAIL_OUTBOX_TABLE',
-            value=table.table_name
         )
 
         callback_endpoint = ssm.StringParameter.value_from_lookup(
@@ -384,11 +343,6 @@ class TaskDefinitionStack(Stack):
         container.add_environment(
             name='SMTP_CREDENTIALS_SECRET_NAME',
             value=ses_smtp_credentials_secret_name
-        )
-
-        container.add_environment(
-            name='DYNAMODB_PIPELINES_ENABLED',
-            value='false'
         )
 
         container.add_environment(

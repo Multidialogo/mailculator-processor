@@ -1,7 +1,7 @@
 # Architettura Generale
 
 ## Panoramica
-Il Mailculator Processor è un'applicazione scritta in Go che elabora email attraverso pipeline parallele utilizzando DynamoDB come storage principale.
+Il Mailculator Processor è un'applicazione scritta in Go che elabora email attraverso pipeline parallele utilizzando MySQL come storage principale.
 
 <img src="images/architecture.png" alt="Architettura Generale" width="600"/>
 
@@ -19,7 +19,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 - **FailedCallbackPipeline** (`internal/pipeline/callback.go`): Gestisce i callback per email falliti
 
 ### Data Layer
-- **Outbox Service** (`internal/outbox/outbox.go`): Interfaccia verso DynamoDB per gestione degli email
+- **MySQL Outbox** (`internal/mysql_outbox/outbox.go`): Gestione degli email e degli stati su MySQL
 - **SMTP Client** (`internal/smtp/client.go`): Client per invio email tramite SMTP
 
 ### Configuration Layer
@@ -32,7 +32,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 - **Task Definition**: Definita tramite CDK con container principale e Datadog sidecar
 
 ### Storage
-- **DynamoDB**: Database principale per metadati degli email
+- **MySQL (RDS/MariaDB)**: Database principale per metadati degli email
 - **EFS**: Storage per file email (.eml)
 
 ### Networking & Security
@@ -45,6 +45,5 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 - **Datadog Agent**: Monitoring e metriche applicative
 
 ## Dipendenze Esterne
-- AWS SDK v2 per Go
 - YAML parser (gopkg.in/yaml.v3)
 - Validator (go-playground/validator/v10)

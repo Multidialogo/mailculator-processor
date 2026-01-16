@@ -41,6 +41,12 @@ Quando l'invio SMTP fallisce:
 - Stato: `FAILED`
 - Reason: Messaggio di errore originale dall'SMTP client
 
+### SMTP Throttling (454)
+Quando l'invio SMTP fallisce con codice `454` (throttling):
+- Stato: ritorna a `READY`
+- Record `PROCESSING` rimosso da `email_statuses`
+- Reason: vuota
+
 ### Callback Failed
 Quando il callback HTTP fallisce dopo tutti i retry:
 - Stato rimane: `CALLING-SENT-CALLBACK` o `CALLING-FAILED-CALLBACK`

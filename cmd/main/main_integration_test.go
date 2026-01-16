@@ -39,7 +39,6 @@ func TestMainComplete(t *testing.T) {
 	t.Setenv("MYSQL_USER", "root")
 	t.Setenv("MYSQL_PASSWORD", "test")
 	t.Setenv("MYSQL_DATABASE", "mailculator_test")
-	t.Setenv("MYSQL_PIPELINES_ENABLED", "true")
 
 	oFacade, err := facades.NewMySQLOutboxFacade()
 	require.NoError(t, err)

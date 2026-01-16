@@ -23,10 +23,6 @@ mysql:
 pipeline:
   interval: ${PIPELINE_INTERVAL}
 
-pipelines:
-  mysql:
-    enabled: ${MYSQL_PIPELINES_ENABLED}
-
 smtp:
   host: "${SMTP_HOST}"
   port: ${SMTP_PORT}

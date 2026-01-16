@@ -58,14 +58,6 @@ type MySQLConfig struct {
 	Database string `yaml:"database"`
 }
 
-type PipelineToggle struct {
-	Enabled bool `yaml:"enabled"`
-}
-
-type PipelinesConfig struct {
-	MySQL PipelineToggle `yaml:"mysql"`
-}
-
 type Config struct {
 	Attachments AttachmentsConfig `yaml:"attachments,flow" validate:"required"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
@@ -73,7 +65,6 @@ type Config struct {
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
 	MySQL       MySQLConfig       `yaml:"mysql,flow"`
 	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
-	Pipelines   PipelinesConfig   `yaml:"pipelines,flow"`
 	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
 }
 
@@ -156,8 +147,4 @@ func (c *Config) GetMySQLDSN() string {
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
-}
-
-func (c *Config) MySQLPipelinesEnabled() bool {
-	return c.Pipelines.MySQL.Enabled
 }

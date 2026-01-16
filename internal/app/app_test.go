@@ -61,10 +61,6 @@ func (cp *configProviderMock) GetMySQLDSN() string {
 	return "sqlmock"
 }
 
-func (cp *configProviderMock) MySQLPipelinesEnabled() bool {
-	return true
-}
-
 func TestAppInstance(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

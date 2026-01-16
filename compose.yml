@@ -26,7 +26,6 @@ services:
       MYSQL_PASSWORD: 'test'
       MYSQL_DATABASE: 'mailculator_test'
       MYSQL_TLS: 'false'
-      MYSQL_PIPELINES_ENABLED: 'true'
     command: >
       sh -c "go mod tidy &&
              ./scripts/coverage.sh unit &&

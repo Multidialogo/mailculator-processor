@@ -388,7 +388,7 @@ class TaskDefinitionStack(Stack):
 
         container.add_environment(
             name='DYNAMODB_PIPELINES_ENABLED',
-            value='true'
+            value='false'
         )
 
         container.add_environment(

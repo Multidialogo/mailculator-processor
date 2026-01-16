@@ -87,7 +87,7 @@ func (m *OutboxMock) Update(ctx context.Context, id string, status string, error
 	return nil
 }
 
-func (m *OutboxMock) Ready(ctx context.Context, id string, emlFilePath string) error {
+func (m *OutboxMock) Ready(ctx context.Context, id string) error {
 	m.lastMethod = "ready"
 	m.updateMethodCall++
 	if m.updateMethodCall == m.updateMethodFailsCall {

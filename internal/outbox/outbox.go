@@ -44,7 +44,6 @@ var retryableErrNos = map[uint16]bool{
 type Email struct {
 	Id              string
 	Status          string
-	EmlFilePath     string
 	PayloadFilePath string
 	UpdatedAt       string
 	Reason          string
@@ -133,7 +132,7 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	// - Rows currently locked by other transactions are skipped
 	// - Reduces contention when multiple workers poll simultaneously
 	query := `
-		SELECT id, status, eml_file_path, payload_file_path, reason, version, updated_at
+		SELECT id, status, payload_file_path, reason, version, updated_at
 		FROM emails
 		WHERE status = ?
 		ORDER BY updated_at ASC
@@ -150,13 +149,12 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	var emails []Email
 	for rows.Next() {
 		var e Email
-		var emlFilePath, payloadFilePath, reason sql.NullString
+		var payloadFilePath, reason sql.NullString
 		var updatedAt time.Time
 
 		err := rows.Scan(
 			&e.Id,
 			&e.Status,
-			&emlFilePath,
 			&payloadFilePath,
 			&reason,
 			&e.Version,
@@ -166,7 +164,6 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 			return []Email{}, err
 		}
 
-		e.EmlFilePath = emlFilePath.String
 		e.PayloadFilePath = payloadFilePath.String
 		e.Reason = reason.String
 		e.UpdatedAt = updatedAt.Format(time.RFC3339)
@@ -288,13 +285,13 @@ func (o *Outbox) Requeue(ctx context.Context, id string) error {
 	return err
 }
 
-// Ready updates the email to READY status with the eml file path.
+// Ready updates the email to READY status.
 // Expected from status is INTAKING.
 // The operation is executed within a transaction with retry logic for transient errors.
-func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string) error {
+func (o *Outbox) Ready(ctx context.Context, id string) error {
 	updateQuery := `
 		UPDATE emails
-		SET status = ?, eml_file_path = ?, version = version + 1
+		SET status = ?, version = version + 1
 		WHERE id = ? AND status = ?
 	`
 	historyQuery := `
@@ -305,7 +302,7 @@ func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string) error
 	var err error
 	for attempt := range maxAttempts {
 		err = o.executeInTransaction(ctx, func(tx *sql.Tx) error {
-			result, execErr := tx.ExecContext(ctx, updateQuery, StatusReady, emlFilePath, id, StatusIntaking)
+			result, execErr := tx.ExecContext(ctx, updateQuery, StatusReady, id, StatusIntaking)
 			if execErr != nil {
 				return execErr
 			}

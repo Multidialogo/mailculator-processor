@@ -22,11 +22,11 @@ func TestQuery_WhenDatabaseHasRecords_ShouldReturnEmails(t *testing.T) {
 
 	now := time.Now()
 
-	rows := sqlmock.NewRows([]string{"id", "status", "eml_file_path", "payload_file_path", "reason", "version", "updated_at"}).
-		AddRow("test-id-1", "READY", "", "/path/to/payload", "", 1, now).
-		AddRow("test-id-2", "READY", "", "/path/to/payload2", "some reason", 2, now)
+	rows := sqlmock.NewRows([]string{"id", "status", "payload_file_path", "reason", "version", "updated_at"}).
+		AddRow("test-id-1", "READY", "/path/to/payload", "", 1, now).
+		AddRow("test-id-2", "READY", "/path/to/payload2", "some reason", 2, now)
 
-	mock.ExpectQuery("SELECT id, status, eml_file_path, payload_file_path, reason, version, updated_at FROM emails").
+	mock.ExpectQuery("SELECT id, status, payload_file_path, reason, version, updated_at FROM emails").
 		WithArgs("READY", 25).
 		WillReturnRows(rows)
 
@@ -38,7 +38,6 @@ func TestQuery_WhenDatabaseHasRecords_ShouldReturnEmails(t *testing.T) {
 	require.Len(t, emails, 2)
 	assert.Equal(t, "test-id-1", emails[0].Id)
 	assert.Equal(t, "READY", emails[0].Status)
-	assert.Equal(t, "", emails[0].EmlFilePath)
 	assert.Equal(t, "test-id-2", emails[1].Id)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -70,7 +69,7 @@ func TestQuery_WhenDatabaseHasNoRecords_ShouldReturnEmptySlice(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	rows := sqlmock.NewRows([]string{"id", "status", "eml_file_path", "payload_file_path", "reason", "version", "updated_at"})
+	rows := sqlmock.NewRows([]string{"id", "status", "payload_file_path", "reason", "version", "updated_at"})
 
 	mock.ExpectQuery("SELECT").
 		WithArgs("READY", 10).
@@ -172,7 +171,7 @@ func TestReady_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Ready(context.TODO(), "test-id", "", nil)
+	err = sut.Ready(context.TODO(), "test-id")
 
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -193,7 +192,7 @@ func TestReady_WhenNoRowsAffected_ShouldReturnLockError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Ready(context.TODO(), "test-id", "", nil)
+	err = sut.Ready(context.TODO(), "test-id")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)

@@ -21,11 +21,8 @@ import (
 
 func TestMainComplete(t *testing.T) {
 	payloadDir := t.TempDir()
-	emlDir := filepath.Join(t.TempDir(), "eml")
-	require.NoError(t, os.MkdirAll(emlDir, 0o755))
 
 	t.Setenv("ATTACHMENTS_BASE_PATH", payloadDir+"/")
-	t.Setenv("EML_STORAGE_PATH", emlDir)
 	t.Setenv("PIPELINE_CALLBACK_URL", "http://127.0.0.1:8081/status-updates")
 	t.Setenv("PIPELINE_INTERVAL", "1")
 	t.Setenv("SMTP_HOST", "127.0.0.1")

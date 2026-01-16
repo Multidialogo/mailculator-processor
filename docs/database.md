@@ -5,7 +5,7 @@
 type Email struct {
     Id              string
     Status          string
-    EmlFilePath     string
+    EmlFilePath     string // Campo mantenuto per compatibilità, non usato
     PayloadFilePath string
     UpdatedAt       string
     Reason          string

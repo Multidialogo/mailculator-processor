@@ -7,9 +7,6 @@ health-check:
   server:
     port: 8080
 
-eml-storage:
-  path: "/efs/eml"
-
 pipeline:
   interval: 3
 

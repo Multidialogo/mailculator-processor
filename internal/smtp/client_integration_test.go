@@ -3,11 +3,14 @@
 package smtp
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"mailculator-processor/internal/email"
 )
 
 var client *Client
@@ -28,12 +31,20 @@ func init() {
 
 func TestClientSendIntegration(t *testing.T) {
 	var wg sync.WaitGroup
+	payload := email.Payload{
+		Id:       "550e8400-e29b-41d4-a716-446655440000",
+		From:     "sender@example.com",
+		ReplyTo:  "reply@example.com",
+		To:       "recipient@example.com",
+		Subject:  "Integration test email",
+		BodyText: "Hello from the integration test",
+	}
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := client.Send("testdata/smol.EML")
+			err := client.Send(payload, "")
 			require.NoError(t, err)
 		}()
 	}

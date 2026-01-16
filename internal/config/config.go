@@ -46,10 +46,6 @@ type AttachmentsConfig struct {
 	BasePath string `yaml:"base-path" validate:"required"`
 }
 
-type EmlStorageConfig struct {
-	Path string `yaml:"path" validate:"required"`
-}
-
 type MySQLConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
@@ -61,7 +57,6 @@ type MySQLConfig struct {
 type Config struct {
 	Attachments AttachmentsConfig `yaml:"attachments,flow" validate:"required"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
-	EmlStorage  EmlStorageConfig  `yaml:"eml-storage,flow" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
 	MySQL       MySQLConfig       `yaml:"mysql,flow"`
 	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
@@ -126,10 +121,6 @@ func (c *Config) GetSmtpConfig() smtp.Config {
 		From:             c.Smtp.From,
 		AllowInsecureTls: c.Smtp.AllowInsecureTls,
 	}
-}
-
-func (c *Config) GetEmlStoragePath() string {
-	return c.EmlStorage.Path
 }
 
 func (c *Config) GetAttachmentsBasePath() string {

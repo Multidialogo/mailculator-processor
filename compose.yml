@@ -19,7 +19,6 @@ services:
       PIPELINE_INTERVAL: '1'
       PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
       ATTACHMENTS_BASE_PATH: 'testdata/attachments'
-      EML_STORAGE_PATH: 'testdata/.out/eml'
       MYSQL_HOST: '127.0.0.1'
       MYSQL_PORT: '3306'
       MYSQL_USER: 'root'

@@ -69,20 +69,20 @@ func (f *MySQLOutboxFacade) Close() error {
 	return f.db.Close()
 }
 
-func (f *MySQLOutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (string, error) {
-	if emlFilePath == "" {
-		emlFilePath = "testdata/smol.EML"
+func (f *MySQLOutboxFacade) AddEmail(ctx context.Context, payloadFilePath string) (string, error) {
+	if payloadFilePath == "" {
+		payloadFilePath = "/path/to/payload.json"
 	}
 
 	id := uuid.NewString()
 	status := "READY"
 
 	query := `
-		INSERT INTO emails (id, status, eml_file_path)
+		INSERT INTO emails (id, status, payload_file_path)
 		VALUES (?, ?, ?)
 	`
 
-	_, err := f.db.ExecContext(ctx, query, id, status, emlFilePath)
+	_, err := f.db.ExecContext(ctx, query, id, status, payloadFilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert email: %w", err)
 	}
@@ -97,19 +97,19 @@ func (f *MySQLOutboxFacade) AddEmail(ctx context.Context, emlFilePath string) (s
 	return id, nil
 }
 
-func (f *MySQLOutboxFacade) AddEmailWithStatus(ctx context.Context, status string, emlFilePath string) (string, error) {
-	if emlFilePath == "" {
-		emlFilePath = "testdata/smol.EML"
+func (f *MySQLOutboxFacade) AddEmailWithStatus(ctx context.Context, status string, payloadFilePath string) (string, error) {
+	if payloadFilePath == "" {
+		payloadFilePath = "/path/to/payload.json"
 	}
 
 	id := uuid.NewString()
 
 	query := `
-		INSERT INTO emails (id, status, eml_file_path)
+		INSERT INTO emails (id, status, payload_file_path)
 		VALUES (?, ?, ?)
 	`
 
-	_, err := f.db.ExecContext(ctx, query, id, status, emlFilePath)
+	_, err := f.db.ExecContext(ctx, query, id, status, payloadFilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert email: %w", err)
 	}

@@ -63,5 +63,5 @@ func TestExpandEnvVars(t *testing.T) {
 	}
 
 	cfg, _ := NewFromYamlContent(yamlContent)
-	assert.Equal(t, randomString, cfg.Outbox.TableName)
+	assert.Equal(t, randomString, cfg.Attachments.BasePath)
 }

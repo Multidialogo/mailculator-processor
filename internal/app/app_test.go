@@ -4,11 +4,11 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,14 +21,6 @@ type configProviderMock struct{}
 
 func newConfigProviderMock() *configProviderMock {
 	return &configProviderMock{}
-}
-
-func (cp *configProviderMock) GetAwsConfig() aws.Config {
-	return aws.Config{
-		Region:       "dummy-region",
-		Credentials:  credentials.NewStaticCredentialsProvider("dummy-key", "dummy-secret", "dummy-session"),
-		BaseEndpoint: aws.String("dummy-endpoint"),
-	}
 }
 
 func (cp *configProviderMock) GetPipelineInterval() int {
@@ -44,10 +36,6 @@ func (cp *configProviderMock) GetCallbackConfig() pipeline.CallbackConfig {
 
 func (cp *configProviderMock) GetHealthCheckServerPort() int {
 	return 8080
-}
-
-func (cp *configProviderMock) GetOutboxTableName() string {
-	return "Outbox"
 }
 
 func (cp *configProviderMock) GetSmtpConfig() smtp.Config {
@@ -70,25 +58,33 @@ func (cp *configProviderMock) GetAttachmentsBasePath() string {
 }
 
 func (cp *configProviderMock) GetMySQLDSN() string {
-	return ""
-}
-
-func (cp *configProviderMock) DynamoDBPipelinesEnabled() bool {
-	return true
+	return "sqlmock"
 }
 
 func (cp *configProviderMock) MySQLPipelinesEnabled() bool {
-	return false
+	return true
 }
 
 func TestAppInstance(t *testing.T) {
-	app, errNew := New(newConfigProviderMock())
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+	mock.ExpectPing()
+
+	opener := func(_ string, _ string) (*sql.DB, error) {
+		return db, nil
+	}
+
+	app, errNew := NewWithMySQLOpener(newConfigProviderMock(), opener)
 	require.NoError(t, errNew)
 	require.Equal(t, 4, len(app.pipes))
 	assert.NotZero(t, app.pipes[0])
 	assert.NotZero(t, app.pipes[1])
 	assert.NotZero(t, app.pipes[2])
 	assert.NotZero(t, app.pipes[3])
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 type processorMock struct {

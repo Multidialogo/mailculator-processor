@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -10,18 +9,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/go-playground/validator/v10"
 
 	"mailculator-processor/internal/pipeline"
 	"mailculator-processor/internal/smtp"
 )
-
-type AwsConfig struct {
-	BaseEndpoint string `yaml:"base_endpoint"`
-	sdkConfig    aws.Config
-}
 
 type CallbacksConfig struct {
 	MaxRetries    int    `yaml:"max_retries" validate:"required"`
@@ -35,10 +27,6 @@ type HealthCheckServerConfig struct {
 
 type HealthCheckConfig struct {
 	Server HealthCheckServerConfig `yaml:"server" validate:"required"`
-}
-
-type OutboxConfig struct {
-	TableName string `yaml:"table-name" validate:"required"`
 }
 
 type PipelineConfig struct {
@@ -75,18 +63,15 @@ type PipelineToggle struct {
 }
 
 type PipelinesConfig struct {
-	DynamoDB PipelineToggle `yaml:"dynamodb"`
-	MySQL    PipelineToggle `yaml:"mysql"`
+	MySQL PipelineToggle `yaml:"mysql"`
 }
 
 type Config struct {
 	Attachments AttachmentsConfig `yaml:"attachments,flow" validate:"required"`
-	Aws         AwsConfig         `yaml:"aws,flow"`
 	Callback    CallbacksConfig   `yaml:"callback,flow" validate:"required"`
 	EmlStorage  EmlStorageConfig  `yaml:"eml-storage,flow" validate:"required"`
 	HealthCheck HealthCheckConfig `yaml:"health-check,flow" validate:"required"`
 	MySQL       MySQLConfig       `yaml:"mysql,flow"`
-	Outbox      OutboxConfig      `yaml:"outbox,flow" validate:"required"`
 	Pipeline    PipelineConfig    `yaml:"pipeline,flow" validate:"required"`
 	Pipelines   PipelinesConfig   `yaml:"pipelines,flow"`
 	Smtp        SmtpConfig        `yaml:"smtp,flow" validate:"required"`
@@ -122,21 +107,7 @@ func (c *Config) load(r io.Reader) error {
 		return err
 	}
 
-	awsConfig, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		return err
-	}
-
-	if c.Aws.BaseEndpoint != "" {
-		awsConfig.BaseEndpoint = aws.String(c.Aws.BaseEndpoint)
-	}
-
-	c.Aws.sdkConfig = awsConfig
 	return nil
-}
-
-func (c *Config) GetAwsConfig() aws.Config {
-	return c.Aws.sdkConfig
 }
 
 func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {
@@ -149,10 +120,6 @@ func (c *Config) GetCallbackConfig() pipeline.CallbackConfig {
 
 func (c *Config) GetHealthCheckServerPort() int {
 	return c.HealthCheck.Server.Port
-}
-
-func (c *Config) GetOutboxTableName() string {
-	return c.Outbox.TableName
 }
 
 func (c *Config) GetPipelineInterval() int {
@@ -189,10 +156,6 @@ func (c *Config) GetMySQLDSN() string {
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
-}
-
-func (c *Config) DynamoDBPipelinesEnabled() bool {
-	return c.Pipelines.DynamoDB.Enabled
 }
 
 func (c *Config) MySQLPipelinesEnabled() bool {

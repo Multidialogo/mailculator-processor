@@ -10,9 +10,6 @@ health-check:
 eml-storage:
   path: "/efs/eml"
 
-outbox:
-  table-name: "Outbox"
-
 pipeline:
   interval: 3
 

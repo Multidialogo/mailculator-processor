@@ -1,80 +1,18 @@
 # Database
 
-## DynamoDB Schema
-
-### Tabella Outbox
-- **Nome**: Configurabile via `EMAIL_OUTBOX_TABLE`
-- **Chiave Primaria**: `Id` (String)
-- **Sort Key**: `Status` (String)
-
-### Attributi
+## Modello Email
 ```go
 type Email struct {
-    Id              string  // Chiave primaria
-    Status          string  // Sort key / Stato corrente
-    EmlFilePath     string  // Path del file .eml su EFS
-    PayloadFilePath string  // Path del file .json contenente il payload per intake
-    UpdatedAt       string  // Timestamp RFC3339 dell'ultimo aggiornamento
-    Reason          string  // Motivo dell'ultimo stato
-    TTL             *int64  // Timestamp Unix in secondi per DynamoDB TTL (nil se non presente)
-    Version         int     // Versione per optimistic locking (MySQL) o 0 (DynamoDB)
+    Id              string
+    Status          string
+    EmlFilePath     string
+    PayloadFilePath string
+    UpdatedAt       string
+    Reason          string
+    TTL             *int64  // Attualmente non usato (nil)
+    Version         int     // Versione per optimistic locking
 }
 ```
-
-### Time To Live (TTL)
-DynamoDB TTL è configurato per eliminare automaticamente i record obsoleti. L'attributo `TTL` deve contenere un timestamp Unix (epoch time) in secondi che indica quando il record deve essere eliminato.
-
-**Posizionamento TTL**:
-- **Nuovi record**: TTL è posizionato alla radice del record DynamoDB
-- **Record legacy**: TTL può essere presente in `Attributes.TTL` per retrocompatibilità
-- **Logica di lettura**: Il sistema prima cerca TTL alla radice, poi in `Attributes.TTL` come fallback. Restituisce `nil` se TTL non è presente da nessuna parte.
-
-**Esempio**:
-```go
-// Record che scade tra 7 giorni
-ttl := time.Now().Add(7 * 24 * time.Hour).Unix()
-```
-
-## Pattern di Versionamento (DynamoDB)
-
-### Status Meta
-- **Costante**: `StatusMeta = "_META"`
-- **Scopo**: Tiene traccia dello stato più recente dell'email
-
-### Status Index
-- **Nome**: `StatusIndex`
-- **Proiezione**: `Id, Status, Attributes`
-- **Query**: Filtra per `Status` e `Attributes.Latest`
-
-### Struttura Dati
-Ogni email ha due tipi di record:
-1. **Record Meta**: `Status = "_META"` con `Attributes.Latest = "{stato_corrente}"` e `TTL = timestamp` alla radice (se presente)
-2. **Record Stato**: `Status = "{stato_corrente}"` con `TTL = timestamp` alla radice del record (se presente)
-
-### Transazione Update
-Ogni cambio di stato esegue una transazione con due statement:
-```sql
--- Update meta record (con TTL se presente)
-UPDATE "table" SET Attributes.Latest=?, Attributes.UpdatedAt=?, Attributes.Reason=?, TTL=?
-WHERE Id=? AND Status=?
-
--- Insert new status record (con TTL se presente)
-INSERT INTO "table" VALUE {'Id': ?, 'Status': ?, 'Attributes': ?, 'TTL': ?}
-```
-
-**Nota**: Il TTL viene sempre sincronizzato tra il record _META e i record di stato. Quando un TTL è presente, viene impostato sia alla radice del record _META che alla radice del nuovo record di stato.
-
-## Unificazione dei Tipi
-
-Entrambi i backend (DynamoDB e MySQL) utilizzano ora lo stesso tipo `Email` con tutti i campi necessari:
-
-- **DynamoDB**: `Version = 0` (non usa locking basato su versione)
-- **MySQL**: `Version` popolato dal database per optimistic locking
-- **TTL**: Presente per DynamoDB, `nil` per MySQL (non supportato)
-
-Questo approccio elimina la duplicazione dei tipi e semplifica l'architettura.
-
----
 
 ## MySQL Schema
 
@@ -102,7 +40,7 @@ CREATE TABLE IF NOT EXISTS emails (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-**Nota**: A differenza di DynamoDB, MySQL non supporta TTL nativo. La pulizia dei record obsoleti deve essere gestita esternamente.
+**Nota**: MySQL non supporta TTL nativo. La pulizia dei record obsoleti deve essere gestita esternamente.
 
 ### Tabella `email_statuses`
 Tabella per lo storico dei cambi di stato (history).
@@ -133,8 +71,6 @@ WHERE id = ? AND status = ?
 ```
 
 Se `affected_rows = 0`, l'operazione restituisce `ErrLockNotAcquired`.
-
-**Nota**: DynamoDB non usa version-based locking, quindi restituisce sempre `Version = 0`.
 
 ### Query con SKIP LOCKED
 Le query di lettura utilizzano `FOR UPDATE SKIP LOCKED` per:
@@ -171,25 +107,3 @@ Le operazioni di update e insert history sono eseguite in transazione per garant
 - `CALLING-FAILED-CALLBACK` - In corso chiamata callback per email fallito
 - `SENT-ACKNOWLEDGED` - Callback per email inviato completato
 - `FAILED-ACKNOWLEDGED` - Callback per email fallito completato
-
-## Query Pattern (DynamoDB)
-
-### Query per Stato
-```sql
-SELECT Id, Status, Attributes, TTL FROM "table"."StatusIndex" 
-WHERE Status=? AND Attributes.Latest =?
-```
-- **Parametri**: `[StatusMeta, target_status]`
-- **Limit**: 25 record per query
-
-### Paginazione
-- Utilizza `NextToken` di DynamoDB per paginazione automatica
-- Interrompe quando raggiunge il limite di 25 record
-
-## PartiQL Operations (DynamoDB)
-
-### ExecuteStatement
-Utilizzato per query con parametri e paginazione.
-
-### ExecuteTransaction  
-Utilizzato per aggiornamenti atomici che coinvolgono meta record e nuovo stato record.

@@ -4,15 +4,14 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,18 +19,40 @@ import (
 	"mailculator-processor/internal/testutils/facades"
 )
 
-const outboxTableName = "Outbox"
-
 func TestMainComplete(t *testing.T) {
-	oFacade, err := facades.NewOutboxFacade(outboxTableName, outbox.StatusMeta)
+	payloadDir := t.TempDir()
+	emlDir := filepath.Join(t.TempDir(), "eml")
+	require.NoError(t, os.MkdirAll(emlDir, 0o755))
+
+	t.Setenv("ATTACHMENTS_BASE_PATH", payloadDir+"/")
+	t.Setenv("EML_STORAGE_PATH", emlDir)
+	t.Setenv("PIPELINE_CALLBACK_URL", "http://127.0.0.1:8081/status-updates")
+	t.Setenv("PIPELINE_INTERVAL", "1")
+	t.Setenv("SMTP_HOST", "127.0.0.1")
+	t.Setenv("SMTP_USER", "user")
+	t.Setenv("SMTP_PASS", "pass")
+	t.Setenv("SMTP_PORT", "1025")
+	t.Setenv("SMTP_FROM", "mailer@example.com")
+	t.Setenv("SMTP_ALLOW_INSECURE_TLS", "true")
+	t.Setenv("MYSQL_HOST", "127.0.0.1")
+	t.Setenv("MYSQL_PORT", "3306")
+	t.Setenv("MYSQL_USER", "root")
+	t.Setenv("MYSQL_PASSWORD", "test")
+	t.Setenv("MYSQL_DATABASE", "mailculator_test")
+	t.Setenv("MYSQL_PIPELINES_ENABLED", "true")
+
+	oFacade, err := facades.NewMySQLOutboxFacade()
 	require.NoError(t, err)
+	defer oFacade.Close()
 
 	fixtures := make([]string, 0)
 
-	dir := t.TempDir()
 	for i := 0; i < 5; i++ {
-		filePath, _ := oFacade.AddEmlFile(dir)
-		emailId, _ := oFacade.AddEmail(context.TODO(), filePath)
+		payloadPath, payloadErr := createPayloadFile(payloadDir)
+		require.NoError(t, payloadErr)
+
+		emailId, err := oFacade.AddEmailWithPayload(context.TODO(), outbox.StatusAccepted, payloadPath)
+		require.NoError(t, err)
 		fixtures = append(fixtures, emailId)
 	}
 
@@ -46,21 +67,15 @@ func TestMainComplete(t *testing.T) {
 	}
 	go srv.ListenAndServe()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	run(ctx)
 	srv.Shutdown(ctx)
 
-	awsConfig := facades.NewAwsConfigFromEnv()
-	db := dynamodb.NewFromConfig(awsConfig)
 	for _, value := range fixtures {
-		query := fmt.Sprintf("SELECT Attributes.Latest FROM \"%v\" WHERE Id=? AND Status=?", outboxTableName)
-		params, _ := attributevalue.MarshalList([]any{value, outbox.StatusMeta})
-		stmt := &dynamodb.ExecuteStatementInput{Statement: aws.String(query), Parameters: params}
-		res, midErr := db.ExecuteStatement(context.TODO(), stmt)
-		require.NoError(t, midErr)
-		assert.Len(t, res.Items, 1)
-		assert.Equal(t, "SENT-ACKNOWLEDGED", res.Items[0]["Latest"].(*types.AttributeValueMemberS).Value)
+		status, err := oFacade.GetEmailStatus(context.TODO(), value)
+		require.NoError(t, err)
+		assert.Equal(t, outbox.StatusSentAcknowledged, status)
 	}
 
 	// Delete fixtures.
@@ -70,4 +85,28 @@ func TestMainComplete(t *testing.T) {
 			t.Errorf("error while deleting fixture %s, error: %v", value, errFix)
 		}
 	}
+}
+
+func createPayloadFile(dir string) (string, error) {
+	payload := map[string]any{
+		"id":          uuid.NewString(),
+		"from":        "sender@example.com",
+		"reply_to":    "reply@example.com",
+		"to":          "recipient@example.com",
+		"subject":     "Integration test email",
+		"body_text":   "Hello from the integration test",
+		"attachments": []string{},
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(dir, uuid.NewString()+".json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", err
+	}
+
+	return path, nil
 }

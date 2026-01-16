@@ -1,7 +1,7 @@
 # Pipeline Parallele del Mailculator Processor
 
 ## Panoramica
-Il sistema esegue quattro pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando DynamoDB come storage e un client SMTP per l'invio.
+Il sistema esegue quattro pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio.
 
 ## Stati degli Email
 - **ACCEPTED**: Email accettato, in attesa di intake

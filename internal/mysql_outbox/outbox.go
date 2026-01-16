@@ -162,7 +162,7 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]outbox.
 // Update changes the status of an email using optimistic locking based on version.
 // It determines the expected "from" status based on the target "to" status.
 // The operation is executed within a transaction with retry logic for transient errors.
-// Note: ttl parameter is ignored for MySQL (TTL is a DynamoDB-specific feature).
+// Note: ttl parameter is ignored for MySQL.
 func (o *Outbox) Update(ctx context.Context, id string, status string, errorReason string, _ *int64) error {
 	fromStatus := getExpectedFromStatus(status)
 
@@ -217,7 +217,7 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 // Ready updates the email to READY status with the eml file path.
 // Expected from status is INTAKING.
 // The operation is executed within a transaction with retry logic for transient errors.
-// Note: ttl parameter is ignored for MySQL (TTL is a DynamoDB-specific feature).
+// Note: ttl parameter is ignored for MySQL.
 func (o *Outbox) Ready(ctx context.Context, id string, emlFilePath string, _ *int64) error {
 	updateQuery := `
 		UPDATE emails

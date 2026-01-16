@@ -1,6 +1,5 @@
-aws:
-  region: "dummy-region-with-quotation-marks"
-  base_endpoint: dummy-base-endpoint
+attachments:
+  base-path: "/base/attachments/path"
 
 callback:
   max_retries: 3
@@ -14,11 +13,10 @@ health-check:
   server:
     port: 8080
 
-outbox:
-  table-name: "Outbox"
-
 pipeline:
   interval: 3
+
+unknown-root: "unexpected"
 
 smtp:
   host: dummy-host

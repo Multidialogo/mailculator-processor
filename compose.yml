@@ -10,10 +10,6 @@ services:
     image: golang:1.25-alpine
     working_dir: /app
     environment:
-      AWS_BASE_ENDPOINT: 'http://127.0.0.1:8001'
-      AWS_ACCESS_KEY_ID: 'local'
-      AWS_SECRET_ACCESS_KEY: 'local'
-      AWS_REGION: 'eu-west-1'
       SMTP_HOST: '127.0.0.1'
       SMTP_USER: 'user'
       SMTP_PASS: 'pass'
@@ -23,7 +19,6 @@ services:
       PIPELINE_INTERVAL: '1'
       PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
       ATTACHMENTS_BASE_PATH: 'testdata/attachments'
-      EMAIL_OUTBOX_TABLE: 'Outbox'
       EML_STORAGE_PATH: 'testdata/.out/eml'
       MYSQL_HOST: '127.0.0.1'
       MYSQL_PORT: '3306'
@@ -31,7 +26,6 @@ services:
       MYSQL_PASSWORD: 'test'
       MYSQL_DATABASE: 'mailculator_test'
       MYSQL_TLS: 'false'
-      DYNAMODB_PIPELINES_ENABLED: 'true'
       MYSQL_PIPELINES_ENABLED: 'true'
     command: >
       sh -c "go mod tidy &&
@@ -43,78 +37,6 @@ services:
       - .:/app
     network_mode: host
 
-  dynamodb: &dynamodb-base
-    profiles:
-      - 'none'
-    image: amazon/dynamodb-local:latest
-    healthcheck:
-      test: ['CMD-SHELL', '[ "$(curl -s -o /dev/null -I -w ''%{http_code}'' http://localhost:8000)" == "400" ]']
-      interval: 2s
-      timeout: 2s
-      retries: 10
-    command: '-jar DynamoDBLocal.jar'
-    ports:
-      - '127.0.0.1:8001:8000'
-    networks:
-      - mailculator-processor-deployments-net
-
-  dynamodb-test:
-    <<: *dynamodb-base
-    container_name: mailculator_processor_dynamodb_test
-    profiles:
-      - 'test-deps'
-
-  dynamodb-devcontainer:
-    <<: *dynamodb-base
-    container_name: mailculator_processor_dynamodb_devcontainer
-    profiles:
-      - 'devcontainer-deps'
-
-  dynamodb-setup: &dynamodb-setup-base
-    profiles:
-      - 'none'
-    image: amazon/aws-cli
-    volumes:
-      - './docker/dynamodb:/scripts'
-    environment:
-      AWS_ACCESS_KEY_ID: 'local'
-      AWS_SECRET_ACCESS_KEY: 'local'
-      AWS_REGION: 'eu-west-1'
-    entrypoint: ['sh', '/scripts/init.sh']
-    networks:
-      - mailculator-processor-deployments-net
-
-  dynamodb-setup-test:
-    <<: *dynamodb-setup-base
-    container_name: mailculator_processor_dynamodb_setup_test
-    profiles:
-      - 'test-deps'
-    command: ['dynamodb-test']
-    depends_on:
-      dynamodb-test:
-        condition: service_healthy
-
-  wait-for-dynamodb-setup-test:
-    container_name: mailculator_processor_wait_for_dynamodb_setup_test
-    profiles:
-      - 'test-deps'
-    image: golang:1.25-alpine
-    command: ['echo', 'Service dynamodb-setup-test is done']
-    networks:
-      - mailculator-processor-deployments-net
-    depends_on:
-      dynamodb-setup-test:
-        condition: service_completed_successfully
-
-  dynamodb-setup-devcontainer:
-    <<: *dynamodb-setup-base
-    container_name: mailculator_processor_dynamodb_setup_devcontainer
-    profiles:
-      - 'devcontainer-deps'
-    command: ['dynamodb-devcontainer']
-    depends_on:
-      dynamodb-devcontainer:
-        condition: service_healthy
 
   mailpit: &mailpit-base
     profiles:
@@ -146,21 +68,6 @@ services:
     ports:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:9002:8025'
-
-  dbadmin:
-    container_name: mailculator_processor_dbadmin_devcontainer
-    profiles:
-      - 'devcontainer-deps'
-    image: aaronshaf/dynamodb-admin
-    ports:
-      - '127.0.0.1:9001:8001'
-    environment:
-      DYNAMO_ENDPOINT: 'http://dynamodb-devcontainer:8000'
-      AWS_REGION: 'eu-west-1'
-      AWS_ACCESS_KEY_ID: 'local'
-      AWS_SECRET_ACCESS_KEY: 'local'
-    networks:
-      - mailculator-processor-deployments-net
 
   mysql: &mysql-base
     profiles:

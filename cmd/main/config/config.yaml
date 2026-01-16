@@ -1,6 +1,3 @@
-aws:
-  base_endpoint: "${AWS_BASE_ENDPOINT}"
-
 attachments:
   base-path: "${ATTACHMENTS_BASE_PATH}"
 
@@ -23,15 +20,10 @@ mysql:
   password: "${MYSQL_PASSWORD}"
   database: "${MYSQL_DATABASE}"
 
-outbox:
-  table-name: "${EMAIL_OUTBOX_TABLE}"
-
 pipeline:
   interval: ${PIPELINE_INTERVAL}
 
 pipelines:
-  dynamodb:
-    enabled: ${DYNAMODB_PIPELINES_ENABLED}
   mysql:
     enabled: ${MYSQL_PIPELINES_ENABLED}
 

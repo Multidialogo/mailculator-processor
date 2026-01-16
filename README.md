@@ -1,6 +1,6 @@
 # MultiDialogo - MailCulator Processor
 
-Un'applicazione scritta in Go che elabora email attraverso pipeline parallele utilizzando DynamoDB come storage principale.
+Un'applicazione scritta in Go che elabora email attraverso pipeline parallele utilizzando MySQL come storage principale.
 
 ## 📚 Documentazione
 
@@ -8,7 +8,7 @@ La documentazione completa del progetto è disponibile nella directory [`docs/`]
 
 - [**Architettura Generale**](./docs/architecture.md) - Panoramica dei componenti principali e infrastruttura AWS
 - [**Pipeline Parallele**](./docs/pipeline.md) - Dettagli sui flussi di elaborazione degli email
-- [**Database**](./docs/database.md) - Schema DynamoDB e pattern di versionamento
+- [**Database**](./docs/database.md) - Schema MySQL e pattern di versionamento
 - [**Gestione Errori**](./docs/error-handling.md) - Strategie di retry e gestione degli errori
 
 ## 🚀 Avvio Rapido
@@ -52,12 +52,11 @@ open ".coverage/report.html"
 
 ### Strumenti Grafici
 
-- **Database administration (dbadmin)**: http://localhost:9001
 - **SMTP (mailpit)**: http://localhost:9002
 
 ## 🏗️ Costruzione e Deployment
 
 Il progetto utilizza CDK per il deployment su AWS ECS Fargate con:
-- DynamoDB per lo storage dei metadati
+- MySQL (RDS/MariaDB) per lo storage dei metadati
 - EFS per i file email
 - CloudWatch e Datadog per il monitoring

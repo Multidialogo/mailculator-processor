@@ -5,18 +5,18 @@ config:
 ---
 flowchart TD
  subgraph App["Multicarrier Email (Daemon)"]
-        Pipelines("3x Pipeline Parallele <br>(invio, callback successo e fail)")
+        Pipelines("3x Pipeline Parallele (invio, callback successo e fail)")
         AppCore("Start")
-        DataLayer("Data Layer<br>(Outbox Service)")
+        DataLayer("Data Layer (Outbox Service)")
         SmtpClient("SMTP Client")
   end
  subgraph Storage["Database"]
-        DynamoDB[("DynamoDB")]
+        MySQL[("MySQL")]
   end
  subgraph External["Servizi Esterni"]
         SMTPServer[("SES")]
   end
     AppCore --> Pipelines
     Pipelines --> DataLayer & SmtpClient
-    DataLayer --> DynamoDB
+    DataLayer --> MySQL
     SmtpClient --> SMTPServer

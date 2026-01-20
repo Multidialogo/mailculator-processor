@@ -19,6 +19,9 @@ mysql:
 
 pipeline:
   interval: ${PIPELINE_INTERVAL}
+  restore:
+    interval: 10
+    timeout_minutes: 30
 
 smtp:
   host: "${SMTP_HOST}"

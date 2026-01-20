@@ -178,6 +178,67 @@ func (o *Outbox) Query(ctx context.Context, status string, limit int) ([]Email, 
 	return emails, nil
 }
 
+// QueryStale returns emails by status that are older than the provided duration.
+func (o *Outbox) QueryStale(ctx context.Context, status string, olderThan time.Duration, limit int) ([]Email, error) {
+	query := `
+		SELECT id, status, payload_file_path, reason, version, updated_at
+		FROM emails
+		WHERE status = ? AND updated_at < ?
+		ORDER BY updated_at ASC
+	`
+	if limit > 0 {
+		query += `
+		LIMIT ?
+	`
+	}
+	query += `
+		FOR UPDATE SKIP LOCKED
+	`
+	cutoff := time.Now().Add(-olderThan)
+
+	args := []any{status, cutoff}
+	if limit > 0 {
+		args = append(args, limit)
+	}
+
+	rows, err := o.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return []Email{}, err
+	}
+	defer rows.Close()
+
+	var emails []Email
+	for rows.Next() {
+		var e Email
+		var payloadFilePath, reason sql.NullString
+		var updatedAt time.Time
+
+		err := rows.Scan(
+			&e.Id,
+			&e.Status,
+			&payloadFilePath,
+			&reason,
+			&e.Version,
+			&updatedAt,
+		)
+		if err != nil {
+			return []Email{}, err
+		}
+
+		e.PayloadFilePath = payloadFilePath.String
+		e.Reason = reason.String
+		e.UpdatedAt = updatedAt.Format(time.RFC3339)
+
+		emails = append(emails, e)
+	}
+
+	if err = rows.Err(); err != nil {
+		return []Email{}, err
+	}
+
+	return emails, nil
+}
+
 // Update changes the status of an email using optimistic locking based on version.
 // It determines the expected "from" status based on the target "to" status.
 // The operation is executed within a transaction with retry logic for transient errors.
@@ -232,25 +293,23 @@ func (o *Outbox) Update(ctx context.Context, id string, status string, errorReas
 	return err
 }
 
-// Requeue updates the email from PROCESSING back to READY and removes the PROCESSING history row.
+// UpdateFrom changes status using an explicit fromStatus (used for restore).
 // The operation is executed within a transaction with retry logic for transient errors.
-func (o *Outbox) Requeue(ctx context.Context, id string) error {
+func (o *Outbox) UpdateFrom(ctx context.Context, id string, fromStatus string, toStatus string, errorReason string) error {
 	updateQuery := `
 		UPDATE emails
 		SET status = ?, reason = ?, version = version + 1
 		WHERE id = ? AND status = ?
 	`
-	deleteProcessingQuery := `
-		DELETE FROM email_statuses
-		WHERE email_id = ? AND status = ?
-		ORDER BY id DESC
-		LIMIT 1
+	historyQuery := `
+		INSERT INTO email_statuses (email_id, status, reason)
+		VALUES (?, ?, ?)
 	`
 
 	var err error
 	for attempt := range maxAttempts {
 		err = o.executeInTransaction(ctx, func(tx *sql.Tx) error {
-			result, execErr := tx.ExecContext(ctx, updateQuery, StatusReady, "", id, StatusProcessing)
+			result, execErr := tx.ExecContext(ctx, updateQuery, toStatus, errorReason, id, fromStatus)
 			if execErr != nil {
 				return execErr
 			}
@@ -264,8 +323,8 @@ func (o *Outbox) Requeue(ctx context.Context, id string) error {
 				return ErrLockNotAcquired
 			}
 
-			_, delErr := tx.ExecContext(ctx, deleteProcessingQuery, id, StatusProcessing)
-			return delErr
+			_, histErr := tx.ExecContext(ctx, historyQuery, id, toStatus, errorReason)
+			return histErr
 		})
 
 		if err == nil || !o.shouldRetryMySQL(err) {

@@ -27,6 +27,14 @@ func (cp *configProviderMock) GetPipelineInterval() int {
 	return 1
 }
 
+func (cp *configProviderMock) GetRestorePipelineInterval() int {
+	return 5
+}
+
+func (cp *configProviderMock) GetRestorePipelineMaxAge() time.Duration {
+	return 30 * time.Minute
+}
+
 func (cp *configProviderMock) GetCallbackConfig() pipeline.CallbackConfig {
 	return pipeline.CallbackConfig{Url: "dummy-domain.com",
 		RetryInterval: 2,
@@ -71,11 +79,15 @@ func TestAppInstance(t *testing.T) {
 
 	app, errNew := NewWithMySQLOpener(newConfigProviderMock(), opener)
 	require.NoError(t, errNew)
-	require.Equal(t, 4, len(app.pipes))
+	require.Equal(t, 8, len(app.pipes))
 	assert.NotZero(t, app.pipes[0])
 	assert.NotZero(t, app.pipes[1])
 	assert.NotZero(t, app.pipes[2])
 	assert.NotZero(t, app.pipes[3])
+	assert.NotZero(t, app.pipes[4])
+	assert.NotZero(t, app.pipes[5])
+	assert.NotZero(t, app.pipes[6])
+	assert.NotZero(t, app.pipes[7])
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -99,7 +111,13 @@ func TestRunFunction(t *testing.T) {
 	proc1 := newProcessorMock(200)
 	proc2 := newProcessorMock(200)
 	healthCheckServer := healthcheck.NewServer(8080)
-	app := &App{pipes: []pipelineProcessor{proc1, proc2}, healthCheckServer: healthCheckServer}
+	app := &App{
+		pipes: []pipelineEntry{
+			{proc: proc1, interval: 1},
+			{proc: proc2, interval: 1},
+		},
+		healthCheckServer: healthCheckServer,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()

@@ -84,6 +84,31 @@ func TestQuery_WhenDatabaseHasNoRecords_ShouldReturnEmptySlice(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestQueryStale_WhenDatabaseHasRecords_ShouldReturnEmails(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{"id", "status", "payload_file_path", "reason", "version", "updated_at"}).
+		AddRow("test-id-1", "READY", "/path/to/payload", "", 1, now)
+
+	mock.ExpectQuery("SELECT id, status, payload_file_path, reason, version, updated_at FROM emails").
+		WithArgs("READY", sqlmock.AnyArg(), 25).
+		WillReturnRows(rows)
+
+	sut := NewOutboxWithDB(db)
+
+	emails, err := sut.QueryStale(context.TODO(), StatusReady, 30*time.Minute, 25)
+
+	assert.NoError(t, err)
+	require.Len(t, emails, 1)
+	assert.Equal(t, "test-id-1", emails[0].Id)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUpdate_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +127,31 @@ func TestUpdate_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "")
+
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateFrom_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE emails").
+		WithArgs("READY", "", "test-id", "PROCESSING").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO email_statuses").
+		WithArgs("test-id", "READY", "").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	sut := NewOutboxWithDB(db)
+
+	err = sut.UpdateFrom(context.TODO(), "test-id", StatusProcessing, StatusReady, "")
 
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -123,7 +172,7 @@ func TestUpdate_WhenNoRowsAffected_ShouldReturnLockError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
@@ -146,7 +195,7 @@ func TestUpdate_WhenDatabaseReturnsError_ShouldReturnError(t *testing.T) {
 
 	sut := NewOutboxWithDB(db)
 
-	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), "test-id", StatusProcessing, "")
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedError, err)
@@ -162,7 +211,7 @@ func TestReady_WhenUpdateSucceeds_ShouldReturnNoError(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE emails").
-		WithArgs("READY", "", "test-id", "INTAKING").
+		WithArgs("READY", "test-id", "INTAKING").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO email_statuses").
 		WithArgs("test-id", "READY", "").
@@ -186,7 +235,7 @@ func TestReady_WhenNoRowsAffected_ShouldReturnLockError(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE emails").
-		WithArgs("READY", "", "test-id", "INTAKING").
+		WithArgs("READY", "test-id", "INTAKING").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 

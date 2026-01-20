@@ -124,7 +124,7 @@ func TestSendEmailError(t *testing.T) {
 	)
 }
 
-func TestSendEmailThrottlingRequeue(t *testing.T) {
+func TestSendEmailThrottlingRestore(t *testing.T) {
 	payloadFile := createPayloadFile(t)
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
@@ -136,9 +136,9 @@ func TestSendEmailThrottlingRequeue(t *testing.T) {
 	sender.Process(context.TODO())
 
 	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
-	assert.Equal(t, "requeue", outboxServiceMock.LastMethod())
+	assert.Equal(t, "updateFrom", outboxServiceMock.LastMethod())
 	assert.Equal(t,
-		"level=INFO msg=\"processing outbox 1\"\nlevel=WARN msg=\"smtp throttling, requeueing: 454 Throttling failure\" outbox=1",
+		"level=INFO msg=\"processing outbox 1\"\nlevel=WARN msg=\"smtp throttling, restoring to READY: 454 Throttling failure\" outbox=1",
 		strings.TrimSpace(buf.String()),
 	)
 }

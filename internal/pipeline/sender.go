@@ -62,9 +62,9 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 
 			if err = p.client.Send(payload, p.attachmentsBasePath); err != nil {
 				if isSMTPThrottling(err) {
-					logger.Warn(fmt.Sprintf("smtp throttling, requeueing: %v", err))
-					if requeueErr := p.outbox.Requeue(context.Background(), outboxEmail.Id); requeueErr != nil {
-						logger.Error(fmt.Sprintf("error requeueing email, error: %v", requeueErr))
+					logger.Warn(fmt.Sprintf("smtp throttling, restoring to READY: %v", err))
+					if restoreErr := p.outbox.UpdateFrom(context.Background(), outboxEmail.Id, outbox.StatusProcessing, outbox.StatusReady, ""); restoreErr != nil {
+						logger.Error(fmt.Sprintf("error restoring email to READY, error: %v", restoreErr))
 					}
 				} else {
 					logger.Error(fmt.Sprintf("failed to send, error: %v", err))

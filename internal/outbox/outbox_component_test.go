@@ -74,7 +74,7 @@ func TestMySQLOutboxComponentWorkflow(t *testing.T) {
 	require.Len(t, res, 0)
 
 	// update fixture to status PROCESSING
-	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "")
 	require.NoError(t, err)
 
 	// filtering by status READY should return 1 record at this point
@@ -90,7 +90,7 @@ func TestMySQLOutboxComponentWorkflow(t *testing.T) {
 	assert.Equal(t, StatusProcessing, res[0].Status)
 
 	// item already is in status PROCESSING, trying to update from READY should fail
-	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLockNotAcquired)
 }
@@ -185,7 +185,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	require.NoError(t, err)
 
 	// ACCEPTED -> INTAKING
-	err = sut.Update(context.TODO(), id, StatusIntaking, "", nil)
+	err = sut.Update(context.TODO(), id, StatusIntaking, "")
 	require.NoError(t, err)
 
 	status, err := facade.GetEmailStatus(context.TODO(), id)
@@ -201,7 +201,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	assert.Equal(t, StatusReady, status)
 
 	// READY -> PROCESSING
-	err = sut.Update(context.TODO(), id, StatusProcessing, "", nil)
+	err = sut.Update(context.TODO(), id, StatusProcessing, "")
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)
@@ -209,7 +209,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	assert.Equal(t, StatusProcessing, status)
 
 	// PROCESSING -> SENT
-	err = sut.Update(context.TODO(), id, StatusSent, "", nil)
+	err = sut.Update(context.TODO(), id, StatusSent, "")
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)
@@ -217,7 +217,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	assert.Equal(t, StatusSent, status)
 
 	// SENT -> CALLING-SENT-CALLBACK
-	err = sut.Update(context.TODO(), id, StatusCallingSentCallback, "", nil)
+	err = sut.Update(context.TODO(), id, StatusCallingSentCallback, "")
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)
@@ -225,7 +225,7 @@ func TestMySQLOutboxStateTransitions(t *testing.T) {
 	assert.Equal(t, StatusCallingSentCallback, status)
 
 	// CALLING-SENT-CALLBACK -> SENT-ACKNOWLEDGED
-	err = sut.Update(context.TODO(), id, StatusSentAcknowledged, "", nil)
+	err = sut.Update(context.TODO(), id, StatusSentAcknowledged, "")
 	require.NoError(t, err)
 
 	status, err = facade.GetEmailStatus(context.TODO(), id)

@@ -1,7 +1,7 @@
 # Pipeline Parallele del Mailculator Processor
 
 ## Panoramica
-Il sistema esegue quattro pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio diretto.
+Il sistema esegue otto pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio diretto.
 
 ## Stati degli Email
 - **ACCEPTED**: Email accettato, in attesa di intake
@@ -97,5 +97,28 @@ Questa pipeline elabora gli email dallo stato FAILED.
    - In caso di successo HTTP 200: aggiorna stato a "FAILED-ACKNOWLEDGED"
 3. **Ciclo**: Si ripete ogni intervallo configurato
 
+## Pipeline 5-8: RestorePipeline (Ripristino Email Bloccate)
+Quattro pipeline di restore riportano gli email in uno stato precedente quando restano bloccati troppo a lungo nello stato di lavorazione:
+
+1. **INTAKING → ACCEPTED**: se l’email è in INTAKING da più di `timeout_minutes`
+2. **PROCESSING → READY**: se l’email è in PROCESSING da più di `timeout_minutes`
+3. **CALLING-SENT-CALLBACK → SENT**: se la callback sent è in corso da più di `timeout_minutes`
+4. **CALLING-FAILED-CALLBACK → FAILED**: se la callback failed è in corso da più di `timeout_minutes`
+
+Per ogni pipeline:
+- **Query**: Recupera tutte le email con stato specifico e `updated_at` più vecchio della soglia
+- **Elaborazione parallela**: Aggiorna lo stato allo step precedente
+- **Ciclo**: Si ripete ogni intervallo configurato
+
 ## Esecuzione Parallela
-Le quattro pipeline vengono eseguite contemporaneamente in goroutine separate, ciascuna con il proprio ciclo di polling che si attiva ogni N secondi (configurabile). Un health check server rimane attivo per monitorare lo stato del sistema.
+Le pipeline vengono eseguite contemporaneamente in goroutine separate, ciascuna con il proprio ciclo di polling che si attiva ogni N secondi (configurabile). Un health check server rimane attivo per monitorare lo stato del sistema.
+
+## Configurazione Restore
+Nel file di configurazione:
+```yaml
+pipeline:
+  interval: 3
+  restore:
+    interval: 10
+    timeout_minutes: 30
+```

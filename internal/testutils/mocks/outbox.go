@@ -2,6 +2,8 @@ package mocks
 
 import (
 	"context"
+	"time"
+
 	"mailculator-processor/internal/outbox"
 )
 
@@ -10,9 +12,10 @@ type OutboxMock struct {
 	updateMethodError     error
 	updateMethodCall      int
 	updateMethodFailsCall int
-	requeueMethodError     error
-	requeueMethodCall      int
-	requeueMethodFailsCall int
+	queryStaleMethodError error
+	updateFromMethodError error
+	updateFromMethodCall  int
+	updateFromFailsCall   int
 	email                 outbox.Email
 	lastMethod            string
 }
@@ -37,15 +40,21 @@ func UpdateMethodFailsCall(updateMethodFailsCall int) OutboxMockOptions {
 	}
 }
 
-func RequeueMethodError(requeueMethodError error) OutboxMockOptions {
+func QueryStaleMethodError(queryStaleMethodError error) OutboxMockOptions {
 	return func(o *OutboxMock) {
-		o.requeueMethodError = requeueMethodError
+		o.queryStaleMethodError = queryStaleMethodError
 	}
 }
 
-func RequeueMethodFailsCall(requeueMethodFailsCall int) OutboxMockOptions {
+func UpdateFromMethodError(updateFromMethodError error) OutboxMockOptions {
 	return func(o *OutboxMock) {
-		o.requeueMethodFailsCall = requeueMethodFailsCall
+		o.updateFromMethodError = updateFromMethodError
+	}
+}
+
+func UpdateFromMethodFailsCall(updateFromFailsCall int) OutboxMockOptions {
+	return func(o *OutboxMock) {
+		o.updateFromFailsCall = updateFromFailsCall
 	}
 }
 
@@ -61,9 +70,10 @@ func NewOutboxMock(opts ...OutboxMockOptions) *OutboxMock {
 		updateMethodError:     nil,
 		updateMethodCall:      0,
 		updateMethodFailsCall: 1,
-		requeueMethodError:     nil,
-		requeueMethodCall:      0,
-		requeueMethodFailsCall: 1,
+		queryStaleMethodError: nil,
+		updateFromMethodError: nil,
+		updateFromMethodCall:  0,
+		updateFromFailsCall:   1,
 		email:                 outbox.Email{},
 		lastMethod:            "",
 	}
@@ -76,6 +86,11 @@ func NewOutboxMock(opts ...OutboxMockOptions) *OutboxMock {
 func (m *OutboxMock) Query(ctx context.Context, status string, limit int) ([]outbox.Email, error) {
 	m.lastMethod = "query"
 	return []outbox.Email{m.email}, m.queryMethodError
+}
+
+func (m *OutboxMock) QueryStale(ctx context.Context, status string, olderThan time.Duration, limit int) ([]outbox.Email, error) {
+	m.lastMethod = "queryStale"
+	return []outbox.Email{m.email}, m.queryStaleMethodError
 }
 
 func (m *OutboxMock) Update(ctx context.Context, id string, status string, errorReason string) error {
@@ -96,11 +111,11 @@ func (m *OutboxMock) Ready(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *OutboxMock) Requeue(ctx context.Context, id string) error {
-	m.lastMethod = "requeue"
-	m.requeueMethodCall++
-	if m.requeueMethodCall == m.requeueMethodFailsCall {
-		return m.requeueMethodError
+func (m *OutboxMock) UpdateFrom(ctx context.Context, id string, fromStatus string, toStatus string, errorReason string) error {
+	m.lastMethod = "updateFrom"
+	m.updateFromMethodCall++
+	if m.updateFromMethodCall == m.updateFromFailsCall {
+		return m.updateFromMethodError
 	}
 	return nil
 }

@@ -19,6 +19,9 @@ mysql:
 
 pipeline:
   interval: 3
+  restore:
+    interval: 10
+    timeout_minutes: 30
 
 smtp:
   host: dummy-host

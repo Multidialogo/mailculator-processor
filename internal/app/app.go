@@ -20,9 +20,13 @@ type pipelineProcessor interface {
 	Process(ctx context.Context)
 }
 
+type pipelineEntry struct {
+	proc     pipelineProcessor
+	interval int
+}
+
 type App struct {
-	pipes             []pipelineProcessor
-	interval          int
+	pipes             []pipelineEntry
 	healthCheckServer *healthcheck.Server
 	mysqlDB           *sql.DB // Keep reference for cleanup
 }
@@ -30,6 +34,8 @@ type App struct {
 type configProvider interface {
 	GetHealthCheckServerPort() int
 	GetPipelineInterval() int
+	GetRestorePipelineInterval() int
+	GetRestorePipelineMaxAge() time.Duration
 	GetCallbackConfig() pipeline.CallbackConfig
 	GetSmtpConfig() smtp.Config
 	GetAttachmentsBasePath() string
@@ -47,7 +53,7 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 	callbackConfig := cp.GetCallbackConfig()
 	healthCheckServer := healthcheck.NewServer(cp.GetHealthCheckServerPort())
 
-	var pipes []pipelineProcessor
+	var pipes []pipelineEntry
 	var mysqlDB *sql.DB
 
 	dsn := cp.GetMySQLDSN()
@@ -74,19 +80,26 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 
 	mysqlOutbox := outbox.NewOutbox(mysqlDB)
 
+	mainInterval := cp.GetPipelineInterval()
+	restoreInterval := cp.GetRestorePipelineInterval()
+	restoreMaxAge := cp.GetRestorePipelineMaxAge()
+
 	pipes = append(pipes,
-		pipeline.NewIntakePipeline(mysqlOutbox),
-		pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath()),
-		pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig),
-		pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig),
+		pipelineEntry{proc: pipeline.NewIntakePipeline(mysqlOutbox), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath()), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewRestoreIntakingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
+		pipelineEntry{proc: pipeline.NewRestoreProcessingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
+		pipelineEntry{proc: pipeline.NewRestoreCallingSentPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
+		pipelineEntry{proc: pipeline.NewRestoreCallingFailedPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 	)
-	slog.Info("MySQL pipelines initialized", "count", 4)
+	slog.Info("MySQL pipelines initialized", "count", len(pipes))
 
 	slog.Info("App initialized", "total_pipelines", len(pipes))
 
 	return &App{
 		pipes:             pipes,
-		interval:          cp.GetPipelineInterval(),
 		healthCheckServer: healthCheckServer,
 		mysqlDB:           mysqlDB,
 	}, nil
@@ -107,11 +120,13 @@ func (a *App) runPipelineUntilContextIsDone(ctx context.Context, proc pipelinePr
 func (a *App) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	for _, proc := range a.pipes {
+	for _, entry := range a.pipes {
+		proc := entry.proc
+		interval := entry.interval
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			a.runPipelineUntilContextIsDone(ctx, proc, a.interval)
+			a.runPipelineUntilContextIsDone(ctx, proc, interval)
 		}()
 	}
 

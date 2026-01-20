@@ -30,7 +30,13 @@ type HealthCheckConfig struct {
 }
 
 type PipelineConfig struct {
-	Interval int `yaml:"interval" validate:"required"`
+	Interval int                   `yaml:"interval" validate:"required"`
+	Restore  RestorePipelineConfig `yaml:"restore,flow" validate:"required"`
+}
+
+type RestorePipelineConfig struct {
+	Interval       int `yaml:"interval" validate:"required"`
+	TimeoutMinutes int `yaml:"timeout_minutes" validate:"required"`
 }
 
 type SmtpConfig struct {
@@ -110,6 +116,14 @@ func (c *Config) GetHealthCheckServerPort() int {
 
 func (c *Config) GetPipelineInterval() int {
 	return c.Pipeline.Interval
+}
+
+func (c *Config) GetRestorePipelineInterval() int {
+	return c.Pipeline.Restore.Interval
+}
+
+func (c *Config) GetRestorePipelineMaxAge() time.Duration {
+	return time.Duration(c.Pipeline.Restore.TimeoutMinutes) * time.Minute
 }
 
 func (c *Config) GetSmtpConfig() smtp.Config {

@@ -189,3 +189,36 @@ func TestIntakeValidationError(t *testing.T) {
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to validate payload")
 	assert.Contains(t, buf.String(), "payload validation failed")
 }
+
+func TestSuccessfulIntakeWithAttachmentsAsStrings(t *testing.T) {
+	payload := email.Payload{
+		Id:          "550e8400-e29b-41d4-a716-446655440000",
+		From:        "sender@example.com",
+		ReplyTo:     "reply@example.com",
+		To:          "recipient@example.com",
+		Subject:     "Test Subject",
+		BodyText:    "Test",
+		Attachments: email.AttachmentList{
+			{Path: "file:///path/to/file.pdf", Name: "file.pdf"},
+		},
+	}
+
+	payloadFile := createTestPayloadFile(t, payload)
+
+	outboxServiceMock := mocks.NewOutboxMock(
+		mocks.Email(outbox.Email{
+			Id:              "1",
+			Status:          outbox.StatusAccepted,
+			PayloadFilePath: payloadFile,
+		}),
+	)
+
+	buf, logger := mocks.NewLoggerMock()
+
+	intake := NewIntakePipeline(outboxServiceMock)
+	intake.logger = logger
+
+	intake.Process(context.TODO())
+
+	assert.Contains(t, buf.String(), "level=INFO msg=\"successfully intaken\" outbox=1")
+}

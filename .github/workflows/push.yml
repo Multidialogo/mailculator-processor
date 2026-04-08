@@ -33,7 +33,7 @@ jobs:
       contents: read
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -108,10 +108,10 @@ jobs:
       - set-environment-variables
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -158,16 +158,16 @@ jobs:
       - set-environment-variables
       - build-image
     container:
-      image: 823598220965.dkr.ecr.eu-west-1.amazonaws.com/alpine-cdk-runner:0ce104344ee2d098f181b1d785bfa55fa68b6e9f
+      image: 823598220965.dkr.ecr.eu-west-1.amazonaws.com/alpine-cdk-runner:3e35d0454dbadd9b2b02f623e56f3bc759acaca3
       credentials:
         username: AWS
         password: ${{ needs.fetch-ecr-password.outputs.ECR_PW }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}

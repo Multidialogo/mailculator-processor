@@ -71,13 +71,15 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 		}
 	}
 
-	for _, attachment := range b.resolveAttachments(payload.Attachments, attachmentsBasePath) {
-		attachmentData, err := os.ReadFile(attachment)
+	for _, attachment := range payload.Attachments {
+		fullPath := attachmentsBasePath + attachment.Path
+
+		attachmentData, err := os.ReadFile(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read attachment: %w", err)
 		}
 
-		if err = b.writeAttachment(&buf, payload.Id, attachment, attachmentData); err != nil {
+		if err = b.writeAttachmentWithName(&buf, payload.Id, fullPath, attachment.Name, attachmentData); err != nil {
 			return nil, err
 		}
 	}
@@ -87,19 +89,6 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 	}
 
 	return buf.Bytes(), nil
-}
-
-func (b *MessageBuilder) resolveAttachments(attachments []string, basePath string) []string {
-	if len(attachments) == 0 {
-		return nil
-	}
-
-	attachmentsWithBasePath := make([]string, len(attachments))
-	for i, attachment := range attachments {
-		attachmentsWithBasePath[i] = basePath + attachment
-	}
-
-	return attachmentsWithBasePath
 }
 
 func (b *MessageBuilder) addStandardHeadersToMessage(msg *mail.Message, data email.Payload) {
@@ -223,7 +212,7 @@ func (lbw *lineBreakWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func (b *MessageBuilder) writeAttachment(target io.Writer, boundary string, path string, data []byte) error {
+func (b *MessageBuilder) writeAttachmentWithName(target io.Writer, boundary string, path string, name string, data []byte) error {
 	mimeType, err := b.detectFileMime(path)
 	if err != nil {
 		return fmt.Errorf("failed to detect file mime type: %w", err)
@@ -233,7 +222,7 @@ func (b *MessageBuilder) writeAttachment(target io.Writer, boundary string, path
 		return fmt.Errorf("failed to write boundary: %w", err)
 	}
 
-	contentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path))
+	contentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", name)
 	if err := b.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
 		return fmt.Errorf("failed to write Content-Disposition header: %w", err)
 	}

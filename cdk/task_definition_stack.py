@@ -55,7 +55,6 @@ class TaskDefinitionStack(Stack):
         tmp_task_definition_arn_parameter_name = env_parameters['TMP_TASK_DEFINITION_ARN_PARAMETER_NAME']
         ses_smtp_credentials_secret_name = env_parameters['SES_SMTP_CREDENTIALS_SECRET_NAME']
         callback_endpoint_parameter_name = env_parameters['CALLBACK_ENDPOINT_PARAMETER_NAME']
-        smtp_sender = env_parameters['SMTP_SENDER']
 
         task_definition_family = f'{selected_environment}-{service_name}'
 
@@ -329,6 +328,10 @@ class TaskDefinitionStack(Stack):
             name='SMTP_PASS',
             value=smtp_password
         )
+
+        smtp_sender = 'bouncestage@tech.multicerta.com'
+        if selected_environment == 'prod':
+            smtp_sender = 'sender@tech.multidialogo.com'
 
         container.add_environment(
             name='SMTP_FROM',

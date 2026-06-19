@@ -157,7 +157,7 @@ jobs:
       - set-environment-variables
       - build-image
     container:
-      image: 823598220965.dkr.ecr.eu-west-1.amazonaws.com/alpine-cdk-runner:3e35d0454dbadd9b2b02f623e56f3bc759acaca3
+      image: 823598220965.dkr.ecr.eu-west-1.amazonaws.com/alpine-cdk-runner:5cfdf90d9e557c8d2198729459355e4625d55ad0
       credentials:
         username: AWS
         password: ${{ needs.fetch-ecr-password.outputs.ECR_PW }}

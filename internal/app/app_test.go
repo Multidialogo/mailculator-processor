@@ -79,15 +79,10 @@ func TestAppInstance(t *testing.T) {
 
 	app, errNew := NewWithMySQLOpener(newConfigProviderMock(), opener)
 	require.NoError(t, errNew)
-	require.Equal(t, 8, len(app.pipes))
-	assert.NotZero(t, app.pipes[0])
-	assert.NotZero(t, app.pipes[1])
-	assert.NotZero(t, app.pipes[2])
-	assert.NotZero(t, app.pipes[3])
-	assert.NotZero(t, app.pipes[4])
-	assert.NotZero(t, app.pipes[5])
-	assert.NotZero(t, app.pipes[6])
-	assert.NotZero(t, app.pipes[7])
+	require.Equal(t, 10, len(app.pipes))
+	for i := range app.pipes {
+		assert.NotZero(t, app.pipes[i])
+	}
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

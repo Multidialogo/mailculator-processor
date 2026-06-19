@@ -263,8 +263,10 @@ func TestGetExpectedFromStatus_ShouldReturnCorrectTransitions(t *testing.T) {
 		{StatusInvalid, StatusIntaking},
 		{StatusCallingSentCallback, StatusSent},
 		{StatusCallingFailedCallback, StatusFailed},
+		{StatusCallingInvalidCallback, StatusInvalid},
 		{StatusSentAcknowledged, StatusCallingSentCallback},
 		{StatusFailedAcknowledged, StatusCallingFailedCallback},
+		{StatusInvalidAcknowledged, StatusCallingInvalidCallback},
 	}
 
 	for _, tc := range testCases {

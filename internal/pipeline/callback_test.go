@@ -43,6 +43,7 @@ func TestSuccessCallbackPipeline(t *testing.T) {
 	callbacks := []*CallbackPipeline{
 		NewSentCallbackPipeline(outboxServiceMock, callbackConfig),
 		NewFailedCallbackPipeline(outboxServiceMock, callbackConfig),
+		NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig),
 	}
 
 	for _, callback := range callbacks {

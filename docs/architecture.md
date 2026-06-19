@@ -17,6 +17,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 - **MainSenderPipeline** (`internal/pipeline/sender.go`): Gestisce l'invio degli email
 - **SentCallbackPipeline** (`internal/pipeline/callback.go`): Gestisce i callback per email inviati
 - **FailedCallbackPipeline** (`internal/pipeline/callback.go`): Gestisce i callback per email falliti
+- **InvalidCallbackPipeline** (`internal/pipeline/callback.go`): Gestisce i callback per email con payload invalido
 
 ### Data Layer
 - **MySQL Outbox** (`internal/outbox/outbox.go`): Gestione degli email e degli stati su MySQL

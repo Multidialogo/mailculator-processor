@@ -174,3 +174,14 @@ func NewFailedCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPi
 		acknowledgedStatus: outbox.StatusFailedAcknowledged,
 	}
 }
+
+func NewInvalidCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
+	return &CallbackPipeline{
+		outbox:             ob,
+		cfg:                cfg,
+		logger:             slog.With("pipe", "invalid-callback"),
+		startStatus:        outbox.StatusInvalid,
+		processingStatus:   outbox.StatusCallingInvalidCallback,
+		acknowledgedStatus: outbox.StatusInvalidAcknowledged,
+	}
+}

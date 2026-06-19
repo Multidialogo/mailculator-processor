@@ -71,3 +71,7 @@ func NewRestoreCallingSentPipeline(ob outboxService, maxAge time.Duration) *Rest
 func NewRestoreCallingFailedPipeline(ob outboxService, maxAge time.Duration) *RestorePipeline {
 	return newRestorePipeline(ob, "restore-calling-failed", outbox.StatusCallingFailedCallback, outbox.StatusFailed, maxAge)
 }
+
+func NewRestoreCallingInvalidPipeline(ob outboxService, maxAge time.Duration) *RestorePipeline {
+	return newRestorePipeline(ob, "restore-calling-invalid", outbox.StatusCallingInvalidCallback, outbox.StatusInvalid, maxAge)
+}

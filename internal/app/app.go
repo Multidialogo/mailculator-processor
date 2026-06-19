@@ -89,10 +89,12 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 		pipelineEntry{proc: pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath()), interval: mainInterval},
 		pipelineEntry{proc: pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
 		pipelineEntry{proc: pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewInvalidCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
 		pipelineEntry{proc: pipeline.NewRestoreIntakingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 		pipelineEntry{proc: pipeline.NewRestoreProcessingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 		pipelineEntry{proc: pipeline.NewRestoreCallingSentPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 		pipelineEntry{proc: pipeline.NewRestoreCallingFailedPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
+		pipelineEntry{proc: pipeline.NewRestoreCallingInvalidPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 	)
 	slog.Info("MySQL pipelines initialized", "count", len(pipes))
 

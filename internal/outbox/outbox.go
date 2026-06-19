@@ -12,17 +12,19 @@ import (
 )
 
 const (
-	StatusAccepted              = "ACCEPTED"
-	StatusIntaking              = "INTAKING"
-	StatusReady                 = "READY"
-	StatusProcessing            = "PROCESSING"
-	StatusSent                  = "SENT"
-	StatusFailed                = "FAILED"
-	StatusInvalid               = "INVALID"
-	StatusCallingSentCallback   = "CALLING-SENT-CALLBACK"
-	StatusCallingFailedCallback = "CALLING-FAILED-CALLBACK"
-	StatusSentAcknowledged      = "SENT-ACKNOWLEDGED"
-	StatusFailedAcknowledged    = "FAILED-ACKNOWLEDGED"
+	StatusAccepted               = "ACCEPTED"
+	StatusIntaking               = "INTAKING"
+	StatusReady                  = "READY"
+	StatusProcessing             = "PROCESSING"
+	StatusSent                   = "SENT"
+	StatusFailed                 = "FAILED"
+	StatusInvalid                = "INVALID"
+	StatusCallingSentCallback    = "CALLING-SENT-CALLBACK"
+	StatusCallingFailedCallback  = "CALLING-FAILED-CALLBACK"
+	StatusCallingInvalidCallback = "CALLING-INVALID-CALLBACK"
+	StatusSentAcknowledged       = "SENT-ACKNOWLEDGED"
+	StatusFailedAcknowledged     = "FAILED-ACKNOWLEDGED"
+	StatusInvalidAcknowledged    = "INVALID-ACKNOWLEDGED"
 )
 
 const (
@@ -400,16 +402,18 @@ func (o *Outbox) Ready(ctx context.Context, id string) error {
 // This maps the state machine transitions.
 func getExpectedFromStatus(toStatus string) string {
 	transitions := map[string]string{
-		StatusIntaking:              StatusAccepted,
-		StatusReady:                 StatusIntaking,
-		StatusProcessing:            StatusReady,
-		StatusSent:                  StatusProcessing,
-		StatusFailed:                StatusProcessing,
-		StatusInvalid:               StatusIntaking,
-		StatusCallingSentCallback:   StatusSent,
-		StatusCallingFailedCallback: StatusFailed,
-		StatusSentAcknowledged:      StatusCallingSentCallback,
-		StatusFailedAcknowledged:    StatusCallingFailedCallback,
+		StatusIntaking:               StatusAccepted,
+		StatusReady:                  StatusIntaking,
+		StatusProcessing:             StatusReady,
+		StatusSent:                   StatusProcessing,
+		StatusFailed:                 StatusProcessing,
+		StatusInvalid:                StatusIntaking,
+		StatusCallingSentCallback:    StatusSent,
+		StatusCallingFailedCallback:  StatusFailed,
+		StatusCallingInvalidCallback: StatusInvalid,
+		StatusSentAcknowledged:       StatusCallingSentCallback,
+		StatusFailedAcknowledged:     StatusCallingFailedCallback,
+		StatusInvalidAcknowledged:    StatusCallingInvalidCallback,
 	}
 
 	if from, ok := transitions[toStatus]; ok {

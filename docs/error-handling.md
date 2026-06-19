@@ -49,7 +49,7 @@ Quando l'invio SMTP fallisce con codice `454` (throttling):
 
 ### Callback Failed
 Quando il callback HTTP fallisce dopo tutti i retry:
-- Stato rimane: `CALLING-SENT-CALLBACK` o `CALLING-FAILED-CALLBACK`
+- Stato rimane: `CALLING-SENT-CALLBACK`, `CALLING-FAILED-CALLBACK` o `CALLING-INVALID-CALLBACK`
 - Log di errore con status code e response body
 
 ### Lock Acquisition Failed

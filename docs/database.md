@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS emails (
     status ENUM(
         'ACCEPTED','INTAKING','READY','PROCESSING',
         'SENT','FAILED','INVALID',
-        'CALLING-SENT-CALLBACK','CALLING-FAILED-CALLBACK',
-        'SENT-ACKNOWLEDGED','FAILED-ACKNOWLEDGED'
+        'CALLING-SENT-CALLBACK','CALLING-FAILED-CALLBACK','CALLING-INVALID-CALLBACK',
+        'SENT-ACKNOWLEDGED','FAILED-ACKNOWLEDGED','INVALID-ACKNOWLEDGED'
     ) NOT NULL,
     payload_file_path VARCHAR(500),
     reason TEXT,
@@ -100,5 +100,7 @@ Le operazioni di update e insert history sono eseguite in transazione per garant
 - `INVALID` - Intake email fallito
 - `CALLING-SENT-CALLBACK` - In corso chiamata callback per email inviato
 - `CALLING-FAILED-CALLBACK` - In corso chiamata callback per email fallito
+- `CALLING-INVALID-CALLBACK` - In corso chiamata callback per email con payload invalido
 - `SENT-ACKNOWLEDGED` - Callback per email inviato completato
 - `FAILED-ACKNOWLEDGED` - Callback per email fallito completato
+- `INVALID-ACKNOWLEDGED` - Callback per email con payload invalido completato

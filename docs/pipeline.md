@@ -1,7 +1,7 @@
 # Pipeline Parallele del Mailculator Processor
 
 ## Panoramica
-Il sistema esegue otto pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio diretto.
+Il sistema esegue dieci pipeline parallele che elaborano gli email attraverso diversi stati del ciclo di vita, utilizzando MySQL come storage e un client SMTP per l'invio diretto.
 
 ## Stati degli Email
 - **ACCEPTED**: Email accettato, in attesa di intake
@@ -13,8 +13,10 @@ Il sistema esegue otto pipeline parallele che elaborano gli email attraverso div
 - **INVALID**: Intake email fallito
 - **CALLING-SENT-CALLBACK**: In corso chiamata callback per email inviato
 - **CALLING-FAILED-CALLBACK**: In corso chiamata callback per email fallito
+- **CALLING-INVALID-CALLBACK**: In corso chiamata callback per email con payload invalido
 - **SENT-ACKNOWLEDGED**: Callback per email inviato completato
 - **FAILED-ACKNOWLEDGED**: Callback per email fallito completato
+- **INVALID-ACKNOWLEDGED**: Callback per email con payload invalido completato
 
 ## Pipeline 1: IntakePipeline (Intake Email)
 Questa pipeline elabora gli email dallo stato ACCEPTED.
@@ -97,13 +99,31 @@ Questa pipeline elabora gli email dallo stato FAILED.
    - In caso di successo HTTP 200: aggiorna stato a "FAILED-ACKNOWLEDGED"
 3. **Ciclo**: Si ripete ogni intervallo configurato
 
-## Pipeline 5-8: RestorePipeline (Ripristino Email Bloccate)
-Quattro pipeline di restore riportano gli email in uno stato precedente quando restano bloccati troppo a lungo nello stato di lavorazione:
+## Pipeline 5: InvalidCallbackPipeline (Callback Email con Payload Invalido)
+Questa pipeline elabora gli email dallo stato INVALID, convergendo nel flusso di errore analogo a FAILED.
+
+1. **Query**: Recupera fino a 25 email con stato "INVALID"
+2. **Elaborazione parallela**: Per ogni email trovato:
+   - Aggiorna lo stato a "CALLING-INVALID-CALLBACK" (lock di elaborazione)
+   - Prepara payload JSON con:
+     - code: "DISPATCH-ERROR"
+     - reached_at: timestamp di aggiornamento
+     - message_ids: array con ID email
+     - reason: motivo dell'errore originale (validazione payload)
+   - Invia richiesta HTTP POST all'URL configurato
+   - La richiesta HTTP usa un timeout di 10 secondi
+   - Gestisce retry in caso di status 409 (CONFLICT) fino a MaxRetries
+   - In caso di successo HTTP 200: aggiorna stato a "INVALID-ACKNOWLEDGED"
+3. **Ciclo**: Si ripete ogni intervallo configurato
+
+## Pipeline 6-10: RestorePipeline (Ripristino Email Bloccate)
+Cinque pipeline di restore riportano gli email in uno stato precedente quando restano bloccati troppo a lungo nello stato di lavorazione:
 
 1. **INTAKING → ACCEPTED**: se l’email è in INTAKING da più di `timeout_minutes`
 2. **PROCESSING → READY**: se l’email è in PROCESSING da più di `timeout_minutes`
 3. **CALLING-SENT-CALLBACK → SENT**: se la callback sent è in corso da più di `timeout_minutes`
 4. **CALLING-FAILED-CALLBACK → FAILED**: se la callback failed è in corso da più di `timeout_minutes`
+5. **CALLING-INVALID-CALLBACK → INVALID**: se la callback invalid è in corso da più di `timeout_minutes`
 
 Per ogni pipeline:
 - **Query**: Recupera tutte le email con stato specifico e `updated_at` più vecchio della soglia

@@ -106,22 +106,48 @@ func TestUpdateError(t *testing.T) {
 	)
 }
 
-func TestSendEmailError(t *testing.T) {
+func TestSendEmailError_InternalError_StoresFullReason(t *testing.T) {
 	payloadFile := createPayloadFile(t)
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(
 		mocks.Email(outbox.Email{Id: "1", Status: "", PayloadFilePath: payloadFile}),
 	)
-	senderServiceMock := newSenderMock(errors.New("some send error"))
+	senderServiceMock := newSenderMock(errors.New("dial tcp smtp-host:587: connection refused"))
 	sender := MainSenderPipeline{outbox: outboxServiceMock, client: senderServiceMock, attachmentsBasePath: "/base/path/", logger: logger}
 
 	sender.Process(context.TODO())
 
 	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
-	assert.Equal(t,
-		"level=INFO msg=\"processing outbox 1\"\nlevel=ERROR msg=\"failed to send, error: some send error\" outbox=1",
-		strings.TrimSpace(buf.String()),
+	assert.Equal(t, "dial tcp smtp-host:587: connection refused", outboxServiceMock.LastUpdateReason)
+	assert.Contains(t, buf.String(), "connection refused")
+}
+
+func TestSendEmailError_SMTPError_StoresFullReason(t *testing.T) {
+	payloadFile := createPayloadFile(t)
+	_, logger := mocks.NewLoggerMock()
+	outboxServiceMock := mocks.NewOutboxMock(
+		mocks.Email(outbox.Email{Id: "1", Status: "", PayloadFilePath: payloadFile}),
 	)
+	senderServiceMock := newSenderMock(&textproto.Error{Code: 552, Msg: "5.3.4 Message too long"})
+	sender := MainSenderPipeline{outbox: outboxServiceMock, client: senderServiceMock, attachmentsBasePath: "/base/path/", logger: logger}
+
+	sender.Process(context.TODO())
+
+	assert.Equal(t, "552 5.3.4 Message too long", outboxServiceMock.LastUpdateReason)
+}
+
+func TestSendEmailError_PayloadLoadError_StoresFullReason(t *testing.T) {
+	_, logger := mocks.NewLoggerMock()
+	outboxServiceMock := mocks.NewOutboxMock(
+		mocks.Email(outbox.Email{Id: "1", Status: "", PayloadFilePath: "/nonexistent/payload.json"}),
+	)
+	senderServiceMock := newSenderMock(nil)
+	sender := MainSenderPipeline{outbox: outboxServiceMock, client: senderServiceMock, attachmentsBasePath: "/base/path/", logger: logger}
+
+	sender.Process(context.TODO())
+
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Contains(t, outboxServiceMock.LastUpdateReason, "failed to read payload file")
 }
 
 func TestSendEmailThrottlingRestore(t *testing.T) {

@@ -8,11 +8,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sync"
 	"time"
 
 	"mailculator-processor/internal/outbox"
 )
+
+const internalErrorReason = "Errore interno di elaborazione"
+
+var smtpErrorPattern = regexp.MustCompile(`^\d{3} `)
 
 type CallbackConfig struct {
 	MaxRetries    int
@@ -61,7 +66,7 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 				reason = "Consegnato al server di posta"
 			} else {
 				statusCode = "DISPATCH-ERROR"
-				reason = email.Reason
+				reason = sanitizeReason(email.Reason)
 			}
 
 			payload := map[string]any{
@@ -151,6 +156,16 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 	}
 
 	wg.Wait()
+}
+
+// sanitizeReason returns the original reason if it looks like an SMTP server
+// response (e.g. "552 5.3.4 Message too long"), or a generic message for
+// internal errors that should not be exposed to external clients.
+func sanitizeReason(reason string) string {
+	if smtpErrorPattern.MatchString(reason) {
+		return reason
+	}
+	return internalErrorReason
 }
 
 func NewSentCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {

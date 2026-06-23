@@ -4,15 +4,18 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"mailculator-processor/internal/outbox"
-	"mailculator-processor/internal/testutils/mocks"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"mailculator-processor/internal/outbox"
+	"mailculator-processor/internal/testutils/mocks"
 )
 
 type testServer struct {
@@ -61,6 +64,104 @@ func TestSuccessCallbackPipeline(t *testing.T) {
 			strings.TrimSpace(buf.String()),
 		)
 	}
+}
+
+func TestSanitizeReason_SMTPError_PreservesOriginal(t *testing.T) {
+	assert.Equal(t, "552 5.3.4 Message too long", sanitizeReason("552 5.3.4 Message too long"))
+	assert.Equal(t, "550 5.1.1 User unknown", sanitizeReason("550 5.1.1 User unknown"))
+	assert.Equal(t, "421 Service not available", sanitizeReason("421 Service not available"))
+}
+
+func TestSanitizeReason_InternalError_ReturnsGeneric(t *testing.T) {
+	assert.Equal(t, internalErrorReason, sanitizeReason("failed to read payload file /data/payloads/xyz.json: no such file or directory"))
+	assert.Equal(t, internalErrorReason, sanitizeReason("dial tcp smtp-host:587: connection refused"))
+	assert.Equal(t, internalErrorReason, sanitizeReason("failed to read attachment: open /data/attachments/file.pdf: permission denied"))
+	assert.Equal(t, internalErrorReason, sanitizeReason("failed to unmarshal payload: invalid character"))
+	assert.Equal(t, internalErrorReason, sanitizeReason("payload validation failed: Key: 'Payload.To' Error:Field validation"))
+	assert.Equal(t, internalErrorReason, sanitizeReason(""))
+}
+
+func TestInvalidCallbackPipeline_SanitizesInternalReason(t *testing.T) {
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{
+		Id:     "1",
+		Status: outbox.StatusInvalid,
+		Reason: "payload validation failed: Key: 'Payload.To' Error:Field validation for 'To' failed",
+	}))
+	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
+
+	var receivedBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &receivedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	callbackConfig.Url = ts.URL
+	buf, logger := mocks.NewLoggerMock()
+	callback := NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback.logger = logger
+
+	callback.Process(context.TODO())
+
+	assert.Equal(t, "DISPATCH-ERROR", receivedBody["code"])
+	assert.Equal(t, internalErrorReason, receivedBody["reason"])
+	assert.Equal(t, []any{"1"}, receivedBody["message_ids"])
+	assert.Contains(t, buf.String(), "callback successfully processed")
+}
+
+func TestFailedCallbackPipeline_PreservesSMTPReason(t *testing.T) {
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{
+		Id:     "1",
+		Status: outbox.StatusFailed,
+		Reason: "552 5.3.4 Message too long",
+	}))
+	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
+
+	var receivedBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &receivedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	callbackConfig.Url = ts.URL
+	_, logger := mocks.NewLoggerMock()
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback.logger = logger
+
+	callback.Process(context.TODO())
+
+	assert.Equal(t, "DISPATCH-ERROR", receivedBody["code"])
+	assert.Equal(t, "552 5.3.4 Message too long", receivedBody["reason"])
+}
+
+func TestFailedCallbackPipeline_SanitizesInternalReason(t *testing.T) {
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{
+		Id:     "1",
+		Status: outbox.StatusFailed,
+		Reason: "dial tcp smtp-host:587: connection refused",
+	}))
+	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
+
+	var receivedBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &receivedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	callbackConfig.Url = ts.URL
+	_, logger := mocks.NewLoggerMock()
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback.logger = logger
+
+	callback.Process(context.TODO())
+
+	assert.Equal(t, "DISPATCH-ERROR", receivedBody["code"])
+	assert.Equal(t, internalErrorReason, receivedBody["reason"])
 }
 
 func TestQueryCallbackError(t *testing.T) {

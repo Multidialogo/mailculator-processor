@@ -18,6 +18,8 @@ type OutboxMock struct {
 	updateFromFailsCall   int
 	email                 outbox.Email
 	lastMethod            string
+	LastUpdateStatus      string
+	LastUpdateReason      string
 }
 
 type OutboxMockOptions func(*OutboxMock)
@@ -95,6 +97,8 @@ func (m *OutboxMock) QueryStale(ctx context.Context, status string, olderThan ti
 
 func (m *OutboxMock) Update(ctx context.Context, id string, status string, errorReason string) error {
 	m.lastMethod = "update"
+	m.LastUpdateStatus = status
+	m.LastUpdateReason = errorReason
 	m.updateMethodCall++
 	if m.updateMethodCall == m.updateMethodFailsCall {
 		return m.updateMethodError

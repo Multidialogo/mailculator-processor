@@ -39,7 +39,22 @@ Le operazioni MySQL (Update, Ready, Create) sono eseguite in transazione:
 ### Email Failed
 Quando l'invio SMTP fallisce:
 - Stato: `FAILED`
-- Reason: Messaggio di errore originale dall'SMTP client
+- Il sistema notifica il chiamante tramite la FailedCallbackPipeline (HTTP POST con code: "DISPATCH-ERROR")
+- Stato finale: `FAILED-ACKNOWLEDGED`
+
+### Email Invalid
+Quando la validazione del payload fallisce durante l'intake:
+- Stato: `INVALID`
+- Il sistema notifica il chiamante tramite la InvalidCallbackPipeline (HTTP POST con code: "DISPATCH-ERROR")
+- Stato finale: `INVALID-ACKNOWLEDGED`
+
+### Sanitizzazione del Reason nelle Callback
+Il campo `reason` nel database conserva sempre l'errore originale completo per il debugging. La sanitizzazione avviene esclusivamente al momento dell'invio della callback HTTP, nella `CallbackPipeline`:
+
+- **Errori SMTP** (reason che inizia con codice a 3 cifre, es. "552 5.3.4 Message too long"): il messaggio del server viene preservato, in quanto informativo per il cliente
+- **Errori interni** (caricamento payload, costruzione messaggio, connessione, autenticazione, TLS, validazione): viene inviato un messaggio generico ("Errore interno di elaborazione")
+
+Il database mantiene sempre l'errore originale completo per il debugging interno.
 
 ### SMTP Throttling (454)
 Quando l'invio SMTP fallisce con codice `454` (throttling):

@@ -133,6 +133,8 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 	assert.Contains(t, buf.String(), "level=INFO msg=\"processing outbox 1\"")
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to validate payload")
 	assert.Contains(t, buf.String(), "failed to read payload file")
+	assert.Equal(t, outbox.StatusInvalid, outboxServiceMock.LastUpdateStatus)
+	assert.Contains(t, outboxServiceMock.LastUpdateReason, "failed to read payload file")
 }
 
 func TestIntakeInvalidJSON(t *testing.T) {
@@ -163,7 +165,6 @@ func TestIntakeInvalidJSON(t *testing.T) {
 }
 
 func TestIntakeValidationError(t *testing.T) {
-	// Invalid payload - missing required fields
 	payload := email.Payload{
 		Id:      "invalid-uuid",
 		From:    "not-an-email",
@@ -188,6 +189,8 @@ func TestIntakeValidationError(t *testing.T) {
 
 	assert.Contains(t, buf.String(), "level=ERROR msg=\"failed to validate payload")
 	assert.Contains(t, buf.String(), "payload validation failed")
+	assert.Equal(t, outbox.StatusInvalid, outboxServiceMock.LastUpdateStatus)
+	assert.Contains(t, outboxServiceMock.LastUpdateReason, "payload validation failed")
 }
 
 func TestSuccessfulIntakeWithAttachmentsAsStrings(t *testing.T) {

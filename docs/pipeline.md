@@ -55,7 +55,8 @@ Questa pipeline elabora gli email dallo stato READY.
 1. **Query**: Recupera fino a 25 email con stato "READY"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "PROCESSING" (lock di elaborazione)
-   - Legge il payload JSON e costruisce il messaggio MIME in memoria
+   - Legge il payload JSON e costruisce il messaggio MIME in memoria (`MessageBuilder`)
+   - Durante la costruzione MIME: scansiona `body_html` per `<img src="data:image/...;base64,...">`, decodifica ogni immagine, assegna un `Content-ID`, la include come parte **inline** in un `multipart/related`, e riscrive l'HTML con `src="cid:..."`; gli allegati file restano `Content-Disposition: attachment`
    - Tenta l'invio tramite client SMTP (net/smtp)
    - In caso di successo: aggiorna stato a "SENT"
    - In caso di fallimento: aggiorna stato a "FAILED" con motivo errore

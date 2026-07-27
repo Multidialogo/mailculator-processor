@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,9 +20,30 @@ import (
 	"mailculator-processor/internal/email"
 )
 
+// Matches data:image/...;base64,... URIs embedded in HTML (e.g. signature images).
+var dataImagePattern = regexp.MustCompile(`(?i)data:image/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)`)
+
 type MessageBuilder struct{}
 
+type inlineImage struct {
+	CID      string
+	MimeType string
+	Filename string
+	Data     []byte
+}
+
 func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string) ([]byte, error) {
+	htmlBody := payload.BodyHTML
+	var inlineImages []inlineImage
+
+	if htmlBody != "" {
+		var err error
+		htmlBody, inlineImages, err = b.extractInlineImages(htmlBody, payload.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	msg := &mail.Message{}
 	b.addStandardHeadersToMessage(msg, payload)
 
@@ -65,8 +87,13 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 		}
 	}
 
-	if payload.BodyHTML != "" {
-		if err := b.writePart(multipartWriter, "text/html", "charset=utf-8", payload.BodyHTML); err != nil {
+	if htmlBody != "" {
+		if len(inlineImages) > 0 {
+			relatedBoundary := payload.Id + "-related"
+			if err := b.writeRelatedHTMLPart(&buf, payload.Id, relatedBoundary, htmlBody, inlineImages); err != nil {
+				return nil, err
+			}
+		} else if err := b.writePart(multipartWriter, "text/html", "charset=utf-8", htmlBody); err != nil {
 			return nil, err
 		}
 	}
@@ -89,6 +116,172 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 	}
 
 	return buf.Bytes(), nil
+}
+
+// extractInlineImages finds data:image base64 URIs in HTML, converts them to CID
+// references, and returns the rewritten HTML plus decoded inline parts.
+func (b *MessageBuilder) extractInlineImages(html string, emailID string) (string, []inlineImage, error) {
+	matches := dataImagePattern.FindAllStringSubmatchIndex(html, -1)
+	if len(matches) == 0 {
+		return html, nil, nil
+	}
+
+	var result strings.Builder
+	var images []inlineImage
+	last := 0
+
+	for i, loc := range matches {
+		result.WriteString(html[last:loc[0]])
+
+		subtype := strings.ToLower(html[loc[2]:loc[3]])
+		rawB64 := html[loc[4]:loc[5]]
+		cleanedB64 := stripBase64Whitespace(rawB64)
+
+		data, err := base64.StdEncoding.DecodeString(cleanedB64)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to decode inline image %d: %w", i+1, err)
+		}
+
+		cid := fmt.Sprintf("inline-%d-%s@mailculator.local", i+1, emailID)
+		images = append(images, inlineImage{
+			CID:      cid,
+			MimeType: "image/" + subtype,
+			Filename: fmt.Sprintf("inline-%d.%s", i+1, extensionForImageSubtype(subtype)),
+			Data:     data,
+		})
+
+		result.WriteString("cid:" + cid)
+		last = loc[1]
+	}
+
+	result.WriteString(html[last:])
+	return result.String(), images, nil
+}
+
+func stripBase64Whitespace(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\t', '\r', '\n':
+			return -1
+		default:
+			return r
+		}
+	}, s)
+}
+
+func extensionForImageSubtype(subtype string) string {
+	switch strings.ToLower(subtype) {
+	case "jpeg", "jpg":
+		return "jpg"
+	case "png":
+		return "png"
+	case "gif":
+		return "gif"
+	case "webp":
+		return "webp"
+	case "svg+xml":
+		return "svg"
+	default:
+		return "bin"
+	}
+}
+
+// writeRelatedHTMLPart writes a multipart/related section (HTML + inline CID images)
+// as one part of the outer multipart/mixed message.
+func (b *MessageBuilder) writeRelatedHTMLPart(target io.Writer, outerBoundary, relatedBoundary, html string, images []inlineImage) error {
+	if _, err := target.Write([]byte(fmt.Sprintf("--%s\r\n", outerBoundary))); err != nil {
+		return fmt.Errorf("failed to write related outer boundary: %w", err)
+	}
+
+	contentType := fmt.Sprintf("multipart/related; boundary=\"%s\"", relatedBoundary)
+	if err := b.writeFoldedHeader(target, "Content-Type", contentType); err != nil {
+		return fmt.Errorf("failed to write related Content-Type: %w", err)
+	}
+
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write newline after related headers: %w", err)
+	}
+
+	if _, err := target.Write([]byte(fmt.Sprintf("--%s\r\n", relatedBoundary))); err != nil {
+		return fmt.Errorf("failed to write related HTML boundary: %w", err)
+	}
+
+	if err := b.writeFoldedHeader(target, "Content-Type", "text/html; charset=utf-8"); err != nil {
+		return fmt.Errorf("failed to write HTML Content-Type: %w", err)
+	}
+	if err := b.writeFoldedHeader(target, "Content-Transfer-Encoding", "quoted-printable"); err != nil {
+		return fmt.Errorf("failed to write HTML Content-Transfer-Encoding: %w", err)
+	}
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write newline after HTML headers: %w", err)
+	}
+
+	qpWriter := quotedprintable.NewWriter(target)
+	if _, err := qpWriter.Write([]byte(html)); err != nil {
+		return fmt.Errorf("failed to write HTML body: %w", err)
+	}
+	if err := qpWriter.Close(); err != nil {
+		return fmt.Errorf("failed to close HTML quoted-printable writer: %w", err)
+	}
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write blank line after HTML body: %w", err)
+	}
+
+	for _, img := range images {
+		if err := b.writeInlineAttachment(target, relatedBoundary, img); err != nil {
+			return err
+		}
+	}
+
+	if _, err := target.Write([]byte(fmt.Sprintf("--%s--\r\n", relatedBoundary))); err != nil {
+		return fmt.Errorf("failed to write related final boundary: %w", err)
+	}
+
+	return nil
+}
+
+func (b *MessageBuilder) writeInlineAttachment(target io.Writer, boundary string, img inlineImage) error {
+	if _, err := target.Write([]byte(fmt.Sprintf("--%s\r\n", boundary))); err != nil {
+		return fmt.Errorf("failed to write inline boundary: %w", err)
+	}
+
+	contentDisposition := fmt.Sprintf("inline; filename=\"%s\"", img.Filename)
+	if err := b.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
+		return fmt.Errorf("failed to write inline Content-Disposition: %w", err)
+	}
+
+	if err := b.writeFoldedHeader(target, "Content-Type", img.MimeType); err != nil {
+		return fmt.Errorf("failed to write inline Content-Type: %w", err)
+	}
+
+	if err := b.writeFoldedHeader(target, "Content-ID", fmt.Sprintf("<%s>", img.CID)); err != nil {
+		return fmt.Errorf("failed to write inline Content-ID: %w", err)
+	}
+
+	if err := b.writeFoldedHeader(target, "Content-Transfer-Encoding", "base64"); err != nil {
+		return fmt.Errorf("failed to write inline Content-Transfer-Encoding: %w", err)
+	}
+
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write newline after inline headers: %w", err)
+	}
+
+	lineBreaker := newLineBreakWriter(target, 76)
+	base64Encoder := base64.NewEncoder(base64.StdEncoding, lineBreaker)
+
+	if _, err := base64Encoder.Write(img.Data); err != nil {
+		return fmt.Errorf("failed to write inline attachment data: %w", err)
+	}
+
+	if err := base64Encoder.Close(); err != nil {
+		return fmt.Errorf("failed to close inline base64 encoder: %w", err)
+	}
+
+	if _, err := target.Write([]byte("\r\n")); err != nil {
+		return fmt.Errorf("failed to write blank line after inline attachment: %w", err)
+	}
+
+	return nil
 }
 
 func (b *MessageBuilder) addStandardHeadersToMessage(msg *mail.Message, data email.Payload) {

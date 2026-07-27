@@ -22,6 +22,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 ### Data Layer
 - **MySQL Outbox** (`internal/outbox/outbox.go`): Gestione degli email e degli stati su MySQL
 - **SMTP Client** (`internal/smtp/client.go`): Client per invio email tramite SMTP
+- **Message Builder** (`internal/smtp/message_builder.go`): Costruisce il messaggio MIME in memoria (senza salvare file `.eml`); converte le immagini `data:image` del body HTML in parti inline con CID (`multipart/related` dentro `multipart/mixed`)
 
 ### Configuration Layer
 - **Config Management** (`internal/config/config.go`): Caricamento e validazione della configurazione da YAML con espansione variabili d'ambiente

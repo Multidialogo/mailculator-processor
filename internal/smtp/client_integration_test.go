@@ -26,7 +26,7 @@ func init() {
 		AllowInsecureTls: true,
 	}
 
-	client = New(cfg)
+	client = New(cfg, 0)
 }
 
 func TestClientSendIntegration(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 
 	"mailculator-processor/internal/email"
 	"mailculator-processor/internal/outbox"
+	smtpclient "mailculator-processor/internal/smtp"
 	"mailculator-processor/internal/testutils/mocks"
 )
 
@@ -148,6 +149,28 @@ func TestSendEmailError_PayloadLoadError_StoresFullReason(t *testing.T) {
 
 	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
 	assert.Contains(t, outboxServiceMock.LastUpdateReason, "failed to read payload file")
+}
+
+func TestSendEmailError_AttachmentsTooLarge_StoresUserFriendlyReason(t *testing.T) {
+	payloadFile := createPayloadFile(t)
+	buf, logger := mocks.NewLoggerMock()
+	outboxServiceMock := mocks.NewOutboxMock(
+		mocks.Email(outbox.Email{Id: "1", Status: "", PayloadFilePath: payloadFile}),
+	)
+	senderServiceMock := newSenderMock(&smtpclient.AttachmentsSizeExceededError{TotalSize: 35000000, MaxSize: 30408704})
+	sender := MainSenderPipeline{outbox: outboxServiceMock, client: senderServiceMock, attachmentsBasePath: "/base/path/", logger: logger}
+
+	sender.Process(context.TODO())
+
+	assert.Equal(t, 0, senderServiceMock.sendMethodCounter)
+	assert.Equal(t, outbox.StatusFailed, outboxServiceMock.LastUpdateStatus)
+	assert.Equal(t, "La dimensione totale degli allegati supera il limite massimo consentito", outboxServiceMock.LastUpdateReason)
+	assert.Contains(t, buf.String(), "35000000 bytes")
+}
+
+func TestErrorReason_PlainError_ReturnsErrorString(t *testing.T) {
+	err := errors.New("some generic error")
+	assert.Equal(t, "some generic error", errorReason(err))
 }
 
 func TestSendEmailThrottlingRestore(t *testing.T) {

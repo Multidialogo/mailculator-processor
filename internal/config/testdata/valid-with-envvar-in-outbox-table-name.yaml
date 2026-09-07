@@ -21,7 +21,7 @@ pipeline:
   interval: 3
   restore:
     interval: 10
-    timeout_minutes: 30
+    timeout_minutes: 60
 
 smtp:
   host: dummy-host

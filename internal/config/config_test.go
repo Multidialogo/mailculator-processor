@@ -53,6 +53,29 @@ func TestNewFromYamlContent(t *testing.T) {
 	}
 }
 
+func TestGetMaxAttachmentsSize_DefaultWhenNotSet(t *testing.T) {
+	yamlContent, err := getYamlContent("testdata/valid.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+
+	cfg, err := NewFromYamlContent(yamlContent)
+	assert.NoError(t, err)
+	assert.Equal(t, DefaultMaxAttachmentsSize, cfg.GetMaxAttachmentsSize())
+}
+
+func TestGetMaxAttachmentsSize_CustomValue(t *testing.T) {
+	yamlContent, err := getYamlContent("testdata/valid.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+
+	cfg, err := NewFromYamlContent(yamlContent)
+	assert.NoError(t, err)
+	cfg.Attachments.MaxSize = 10000000
+	assert.Equal(t, 10000000, cfg.GetMaxAttachmentsSize())
+}
+
 func TestExpandEnvVars(t *testing.T) {
 	randomString := fmt.Sprintf("ran%d", rand.Int())
 	t.Setenv("TEST_ENV_VAR", randomString)

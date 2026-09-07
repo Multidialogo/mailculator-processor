@@ -2,8 +2,6 @@ module mailculator-processor
 
 go 1.25.0
 
-toolchain go1.25.3
-
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/go-playground/validator/v10 v10.25.0

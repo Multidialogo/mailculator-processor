@@ -68,7 +68,7 @@ func (p *MainSenderPipeline) Process(ctx context.Context) {
 					}
 				} else {
 					logger.Error(fmt.Sprintf("failed to send, error: %v", err))
-					p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, err.Error())
+					p.handle(context.Background(), logger, outboxEmail.Id, outbox.StatusFailed, errorReason(err))
 				}
 			} else {
 				logger.Info("successfully sent")
@@ -85,6 +85,18 @@ func (p *MainSenderPipeline) handle(ctx context.Context, logger *slog.Logger, em
 		msg := fmt.Sprintf("error updating status to %v, error: %v", status, err)
 		logger.Error(msg)
 	}
+}
+
+type reasoner interface {
+	Reason() string
+}
+
+func errorReason(err error) string {
+	var r reasoner
+	if errors.As(err, &r) {
+		return r.Reason()
+	}
+	return err.Error()
 }
 
 func isSMTPThrottling(err error) bool {

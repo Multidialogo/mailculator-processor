@@ -1,5 +1,6 @@
 attachments:
   base-path: "${ATTACHMENTS_BASE_PATH}"
+  max-size: ${MAX_ATTACHMENTS_SIZE_BYTES}
 
 callback:
   max_retries: 3
@@ -21,7 +22,7 @@ pipeline:
   interval: ${PIPELINE_INTERVAL}
   restore:
     interval: 10
-    timeout_minutes: 30
+    timeout_minutes: 60
 
 smtp:
   host: "${SMTP_HOST}"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/mail"
 	"net/smtp"
+	"os"
 
 	"mailculator-processor/internal/email"
 )
@@ -19,18 +20,24 @@ type Config struct {
 }
 
 type Client struct {
-	cfg     Config
-	builder *MessageBuilder
+	cfg                Config
+	builder            *MessageBuilder
+	maxAttachmentsSize int
 }
 
-func New(cfg Config) *Client {
+func New(cfg Config, maxAttachmentsSize int) *Client {
 	return &Client{
-		cfg:     cfg,
-		builder: &MessageBuilder{},
+		cfg:                cfg,
+		builder:            &MessageBuilder{},
+		maxAttachmentsSize: maxAttachmentsSize,
 	}
 }
 
 func (c *Client) Send(payload email.Payload, attachmentsBasePath string) error {
+	if err := c.checkAttachmentsSize(payload.Attachments, attachmentsBasePath); err != nil {
+		return err
+	}
+
 	message, err := c.builder.Build(payload, attachmentsBasePath)
 	if err != nil {
 		return err
@@ -97,6 +104,43 @@ func (c *Client) Send(payload email.Payload, attachmentsBasePath string) error {
 
 	if err := client.Quit(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+type AttachmentsSizeExceededError struct {
+	TotalSize int64
+	MaxSize   int
+}
+
+func (e *AttachmentsSizeExceededError) Error() string {
+	return fmt.Sprintf(
+		"la dimensione totale degli allegati (%d bytes) supera il limite massimo consentito di %d bytes",
+		e.TotalSize, e.MaxSize,
+	)
+}
+
+func (e *AttachmentsSizeExceededError) Reason() string {
+	return "La dimensione totale degli allegati supera il limite massimo consentito"
+}
+
+func (c *Client) checkAttachmentsSize(attachments email.AttachmentList, basePath string) error {
+	if c.maxAttachmentsSize <= 0 || len(attachments) == 0 {
+		return nil
+	}
+
+	var totalSize int64
+	for _, att := range attachments {
+		info, err := os.Stat(basePath + att.Path)
+		if err != nil {
+			return fmt.Errorf("impossibile verificare la dimensione dell'allegato %s: %w", att.Name, err)
+		}
+		totalSize += info.Size()
+	}
+
+	if totalSize > int64(c.maxAttachmentsSize) {
+		return &AttachmentsSizeExceededError{TotalSize: totalSize, MaxSize: c.maxAttachmentsSize}
 	}
 
 	return nil

@@ -50,7 +50,10 @@ type SmtpConfig struct {
 
 type AttachmentsConfig struct {
 	BasePath string `yaml:"base-path" validate:"required"`
+	MaxSize  int    `yaml:"max-size"`
 }
+
+const DefaultMaxAttachmentsSize = 30408704
 
 type MySQLConfig struct {
 	Host     string `yaml:"host"`
@@ -139,6 +142,13 @@ func (c *Config) GetSmtpConfig() smtp.Config {
 
 func (c *Config) GetAttachmentsBasePath() string {
 	return c.Attachments.BasePath
+}
+
+func (c *Config) GetMaxAttachmentsSize() int {
+	if c.Attachments.MaxSize > 0 {
+		return c.Attachments.MaxSize
+	}
+	return DefaultMaxAttachmentsSize
 }
 
 func (c *Config) GetMySQLConfig() MySQLConfig {

@@ -61,6 +61,10 @@ func (cp *configProviderMock) GetAttachmentsBasePath() string {
 	return "/base/attachments/path/"
 }
 
+func (cp *configProviderMock) GetMaxAttachmentsSize() int {
+	return 30408704
+}
+
 func (cp *configProviderMock) GetMySQLDSN() string {
 	return "sqlmock"
 }

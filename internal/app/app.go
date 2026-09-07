@@ -39,6 +39,7 @@ type configProvider interface {
 	GetCallbackConfig() pipeline.CallbackConfig
 	GetSmtpConfig() smtp.Config
 	GetAttachmentsBasePath() string
+	GetMaxAttachmentsSize() int
 	GetMySQLDSN() string
 }
 
@@ -49,7 +50,7 @@ func New(cp configProvider) (*App, error) {
 }
 
 func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
-	client := smtp.New(cp.GetSmtpConfig())
+	client := smtp.New(cp.GetSmtpConfig(), cp.GetMaxAttachmentsSize())
 	callbackConfig := cp.GetCallbackConfig()
 	healthCheckServer := healthcheck.NewServer(cp.GetHealthCheckServerPort())
 

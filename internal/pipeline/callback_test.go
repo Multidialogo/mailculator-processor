@@ -72,6 +72,13 @@ func TestSanitizeReason_SMTPError_PreservesOriginal(t *testing.T) {
 	assert.Equal(t, "421 Service not available", sanitizeReason("421 Service not available"))
 }
 
+func TestSanitizeReason_UserFacingReason_PreservesOriginal(t *testing.T) {
+	assert.Equal(t,
+		"La dimensione totale degli allegati supera il limite massimo consentito",
+		sanitizeReason("La dimensione totale degli allegati supera il limite massimo consentito"),
+	)
+}
+
 func TestSanitizeReason_InternalError_ReturnsGeneric(t *testing.T) {
 	assert.Equal(t, internalErrorReason, sanitizeReason("failed to read payload file /data/payloads/xyz.json: no such file or directory"))
 	assert.Equal(t, internalErrorReason, sanitizeReason("dial tcp smtp-host:587: connection refused"))
@@ -135,6 +142,33 @@ func TestFailedCallbackPipeline_PreservesSMTPReason(t *testing.T) {
 
 	assert.Equal(t, "DISPATCH-ERROR", receivedBody["code"])
 	assert.Equal(t, "552 5.3.4 Message too long", receivedBody["reason"])
+}
+
+func TestFailedCallbackPipeline_PreservesAttachmentsSizeReason(t *testing.T) {
+	outboxServiceMock := mocks.NewOutboxMock(mocks.Email(outbox.Email{
+		Id:     "1",
+		Status: outbox.StatusFailed,
+		Reason: "La dimensione totale degli allegati supera il limite massimo consentito",
+	}))
+	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
+
+	var receivedBody map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &receivedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	callbackConfig.Url = ts.URL
+	_, logger := mocks.NewLoggerMock()
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback.logger = logger
+
+	callback.Process(context.TODO())
+
+	assert.Equal(t, "DISPATCH-ERROR", receivedBody["code"])
+	assert.Equal(t, "La dimensione totale degli allegati supera il limite massimo consentito", receivedBody["reason"])
 }
 
 func TestFailedCallbackPipeline_SanitizesInternalReason(t *testing.T) {

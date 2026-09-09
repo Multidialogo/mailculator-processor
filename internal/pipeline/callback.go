@@ -19,6 +19,10 @@ const internalErrorReason = "Errore interno di elaborazione"
 
 var smtpErrorPattern = regexp.MustCompile(`^\d{3} `)
 
+var userFacingReasons = map[string]bool{
+	"La dimensione totale degli allegati supera il limite massimo consentito": true,
+}
+
 type CallbackConfig struct {
 	MaxRetries    int
 	RetryInterval time.Duration
@@ -159,10 +163,15 @@ func (p *CallbackPipeline) Process(ctx context.Context) {
 }
 
 // sanitizeReason returns the original reason if it looks like an SMTP server
-// response (e.g. "552 5.3.4 Message too long"), or a generic message for
-// internal errors that should not be exposed to external clients.
+// response (e.g. "552 5.3.4 Message too long") or is a known user-facing
+// application message (listed in userFacingReasons). All other reasons are
+// replaced with a generic message to avoid exposing internal errors to
+// external clients.
 func sanitizeReason(reason string) string {
 	if smtpErrorPattern.MatchString(reason) {
+		return reason
+	}
+	if userFacingReasons[reason] {
 		return reason
 	}
 	return internalErrorReason

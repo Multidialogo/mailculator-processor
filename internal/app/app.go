@@ -34,6 +34,7 @@ type App struct {
 type configProvider interface {
 	GetHealthCheckServerPort() int
 	GetPipelineInterval() int
+	GetPipelineBatchSize() int
 	GetRestorePipelineInterval() int
 	GetRestorePipelineMaxAge() time.Duration
 	GetCallbackConfig() pipeline.CallbackConfig
@@ -82,15 +83,16 @@ func NewWithMySQLOpener(cp configProvider, opener mysqlOpener) (*App, error) {
 	mysqlOutbox := outbox.NewOutbox(mysqlDB)
 
 	mainInterval := cp.GetPipelineInterval()
+	batchSize := cp.GetPipelineBatchSize()
 	restoreInterval := cp.GetRestorePipelineInterval()
 	restoreMaxAge := cp.GetRestorePipelineMaxAge()
 
 	pipes = append(pipes,
-		pipelineEntry{proc: pipeline.NewIntakePipeline(mysqlOutbox), interval: mainInterval},
-		pipelineEntry{proc: pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath()), interval: mainInterval},
-		pipelineEntry{proc: pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
-		pipelineEntry{proc: pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
-		pipelineEntry{proc: pipeline.NewInvalidCallbackPipeline(mysqlOutbox, callbackConfig), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewIntakePipeline(mysqlOutbox, batchSize), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewMainSenderPipeline(mysqlOutbox, client, cp.GetAttachmentsBasePath(), batchSize), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewSentCallbackPipeline(mysqlOutbox, callbackConfig, batchSize), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewFailedCallbackPipeline(mysqlOutbox, callbackConfig, batchSize), interval: mainInterval},
+		pipelineEntry{proc: pipeline.NewInvalidCallbackPipeline(mysqlOutbox, callbackConfig, batchSize), interval: mainInterval},
 		pipelineEntry{proc: pipeline.NewRestoreIntakingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 		pipelineEntry{proc: pipeline.NewRestoreProcessingPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},
 		pipelineEntry{proc: pipeline.NewRestoreCallingSentPipeline(mysqlOutbox, restoreMaxAge), interval: restoreInterval},

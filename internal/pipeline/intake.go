@@ -11,19 +11,21 @@ import (
 )
 
 type IntakePipeline struct {
-	outbox outboxService
-	logger *slog.Logger
+	outbox    outboxService
+	batchSize int
+	logger    *slog.Logger
 }
 
-func NewIntakePipeline(outbox outboxService) *IntakePipeline {
+func NewIntakePipeline(outbox outboxService, batchSize int) *IntakePipeline {
 	return &IntakePipeline{
-		outbox: outbox,
-		logger: slog.With("pipe", "intake"),
+		outbox:    outbox,
+		batchSize: batchSize,
+		logger:    slog.With("pipe", "intake"),
 	}
 }
 
 func (p *IntakePipeline) Process(ctx context.Context) {
-	acceptedList, err := p.outbox.Query(ctx, outbox.StatusAccepted, 25)
+	acceptedList, err := p.outbox.Query(ctx, outbox.StatusAccepted, p.batchSize)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error while querying emails to process: %v", err))
 		return

@@ -63,7 +63,7 @@ func TestSuccessfulIntake(t *testing.T) {
 
 	buf, logger := mocks.NewLoggerMock()
 
-	intake := NewIntakePipeline(outboxServiceMock)
+	intake := NewIntakePipeline(outboxServiceMock, 23)
 	intake.logger = logger
 
 	intake.Process(context.TODO())
@@ -125,7 +125,7 @@ func TestIntakeInvalidPayloadFile(t *testing.T) {
 		}),
 	)
 
-	intake := NewIntakePipeline(outboxServiceMock)
+	intake := NewIntakePipeline(outboxServiceMock, 23)
 	intake.logger = logger
 
 	intake.Process(context.TODO())
@@ -155,7 +155,7 @@ func TestIntakeInvalidJSON(t *testing.T) {
 		}),
 	)
 
-	intake := NewIntakePipeline(outboxServiceMock)
+	intake := NewIntakePipeline(outboxServiceMock, 23)
 	intake.logger = logger
 
 	intake.Process(context.TODO())
@@ -182,7 +182,7 @@ func TestIntakeValidationError(t *testing.T) {
 		}),
 	)
 
-	intake := NewIntakePipeline(outboxServiceMock)
+	intake := NewIntakePipeline(outboxServiceMock, 23)
 	intake.logger = logger
 
 	intake.Process(context.TODO())
@@ -218,7 +218,7 @@ func TestSuccessfulIntakeWithAttachmentsAsStrings(t *testing.T) {
 
 	buf, logger := mocks.NewLoggerMock()
 
-	intake := NewIntakePipeline(outboxServiceMock)
+	intake := NewIntakePipeline(outboxServiceMock, 23)
 	intake.logger = logger
 
 	intake.Process(context.TODO())

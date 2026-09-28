@@ -44,9 +44,9 @@ func TestSuccessCallbackPipeline(t *testing.T) {
 	callbackConfig := CallbackConfig{RetryInterval: 2, MaxRetries: 3}
 
 	callbacks := []*CallbackPipeline{
-		NewSentCallbackPipeline(outboxServiceMock, callbackConfig),
-		NewFailedCallbackPipeline(outboxServiceMock, callbackConfig),
-		NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig),
+		NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23),
+		NewFailedCallbackPipeline(outboxServiceMock, callbackConfig, 23),
+		NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig, 23),
 	}
 
 	for _, callback := range callbacks {
@@ -106,7 +106,7 @@ func TestInvalidCallbackPipeline_SanitizesInternalReason(t *testing.T) {
 
 	callbackConfig.Url = ts.URL
 	buf, logger := mocks.NewLoggerMock()
-	callback := NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewInvalidCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 
 	callback.Process(context.TODO())
@@ -135,7 +135,7 @@ func TestFailedCallbackPipeline_PreservesSMTPReason(t *testing.T) {
 
 	callbackConfig.Url = ts.URL
 	_, logger := mocks.NewLoggerMock()
-	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 
 	callback.Process(context.TODO())
@@ -162,7 +162,7 @@ func TestFailedCallbackPipeline_PreservesAttachmentsSizeReason(t *testing.T) {
 
 	callbackConfig.Url = ts.URL
 	_, logger := mocks.NewLoggerMock()
-	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 
 	callback.Process(context.TODO())
@@ -189,7 +189,7 @@ func TestFailedCallbackPipeline_SanitizesInternalReason(t *testing.T) {
 
 	callbackConfig.Url = ts.URL
 	_, logger := mocks.NewLoggerMock()
-	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewFailedCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 
 	callback.Process(context.TODO())
@@ -202,7 +202,7 @@ func TestQueryCallbackError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(mocks.QueryMethodError(errors.New("some query error")))
 	callbackConfig := CallbackConfig{Url: "", RetryInterval: 2, MaxRetries: 3}
-	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 	callback.Process(context.TODO())
 
@@ -216,7 +216,7 @@ func TestLockUpdateError(t *testing.T) {
 	buf, logger := mocks.NewLoggerMock()
 	outboxServiceMock := mocks.NewOutboxMock(mocks.UpdateMethodError(errors.New("some update error")))
 	callbackConfig := CallbackConfig{Url: "", RetryInterval: 2, MaxRetries: 3}
-	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 	callback.Process(context.TODO())
 
@@ -234,7 +234,7 @@ func TestHttpClientDoError(t *testing.T) {
 		mocks.UpdateMethodFailsCall(2),
 	)
 	callbackConfig := CallbackConfig{Url: "pippo://pluto.it", RetryInterval: 2, MaxRetries: 3}
-	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 	callback.Process(context.TODO())
 
@@ -254,7 +254,7 @@ func TestAcknowledgedUpdateError(t *testing.T) {
 	ts := newTestServer(http.StatusOK)
 	defer ts.server.Close()
 	callbackConfig := CallbackConfig{Url: ts.server.URL, RetryInterval: 2, MaxRetries: 3}
-	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 	callback.Process(context.TODO())
 
@@ -270,7 +270,7 @@ func TestStatusConflict(t *testing.T) {
 	ts := newTestServer(http.StatusConflict)
 	defer ts.server.Close()
 	callbackConfig := CallbackConfig{Url: ts.server.URL, RetryInterval: 2, MaxRetries: 3}
-	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig)
+	callback := NewSentCallbackPipeline(outboxServiceMock, callbackConfig, 23)
 	callback.logger = logger
 	callback.Process(context.TODO())
 

@@ -30,8 +30,9 @@ type HealthCheckConfig struct {
 }
 
 type PipelineConfig struct {
-	Interval int                   `yaml:"interval" validate:"required"`
-	Restore  RestorePipelineConfig `yaml:"restore,flow" validate:"required"`
+	Interval  int                   `yaml:"interval" validate:"required"`
+	BatchSize int                   `yaml:"batch-size" validate:"required,gt=0"`
+	Restore   RestorePipelineConfig `yaml:"restore,flow" validate:"required"`
 }
 
 type RestorePipelineConfig struct {
@@ -119,6 +120,10 @@ func (c *Config) GetHealthCheckServerPort() int {
 
 func (c *Config) GetPipelineInterval() int {
 	return c.Pipeline.Interval
+}
+
+func (c *Config) GetPipelineBatchSize() int {
+	return c.Pipeline.BatchSize
 }
 
 func (c *Config) GetRestorePipelineInterval() int {

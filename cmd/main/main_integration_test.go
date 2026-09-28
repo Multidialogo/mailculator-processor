@@ -25,6 +25,7 @@ func TestMainComplete(t *testing.T) {
 	t.Setenv("ATTACHMENTS_BASE_PATH", payloadDir+"/")
 	t.Setenv("PIPELINE_CALLBACK_URL", "http://127.0.0.1:8081/status-updates")
 	t.Setenv("PIPELINE_INTERVAL", "1")
+	t.Setenv("PIPELINE_BATCH_SIZE", "23")
 	t.Setenv("SMTP_HOST", "127.0.0.1")
 	t.Setenv("SMTP_USER", "user")
 	t.Setenv("SMTP_PASS", "pass")

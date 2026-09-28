@@ -21,7 +21,7 @@ Il sistema esegue dieci pipeline parallele che elaborano gli email attraverso di
 ## Pipeline 1: IntakePipeline (Intake Email)
 Questa pipeline elabora gli email dallo stato ACCEPTED.
 
-1. **Query**: Recupera fino a 25 email con stato "ACCEPTED"
+1. **Query**: Recupera fino a `PIPELINE_BATCH_SIZE` email con stato "ACCEPTED"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "INTAKING" (lock di elaborazione)
    - Legge il file JSON dal percorso specificato in `PayloadFilePath`
@@ -52,7 +52,7 @@ Questa pipeline elabora gli email dallo stato READY.
 
 <img src="images/main-pipeline.png" alt="Pipeline Main Sender" width="500"/>
 
-1. **Query**: Recupera fino a 25 email con stato "READY"
+1. **Query**: Recupera fino a `PIPELINE_BATCH_SIZE` email con stato "READY"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "PROCESSING" (lock di elaborazione)
    - Legge il payload JSON e costruisce il messaggio MIME in memoria (`MessageBuilder`)
@@ -67,7 +67,7 @@ Questa pipeline elabora gli email dallo stato SENT.
 
 <img src="images/sent-pipeline.png" alt="Pipeline Sent Callback" width="500"/>
 
-1. **Query**: Recupera fino a 25 email con stato "SENT"
+1. **Query**: Recupera fino a `PIPELINE_BATCH_SIZE` email con stato "SENT"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "CALLING-SENT-CALLBACK" (lock di elaborazione)
    - Prepara payload JSON con:
@@ -86,7 +86,7 @@ Questa pipeline elabora gli email dallo stato FAILED.
 
 <img src="images/failed-pipeline.png" alt="Pipeline Failed Callback" width="500"/>
 
-1. **Query**: Recupera fino a 25 email con stato "FAILED"
+1. **Query**: Recupera fino a `PIPELINE_BATCH_SIZE` email con stato "FAILED"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "CALLING-FAILED-CALLBACK" (lock di elaborazione)
    - Prepara payload JSON con:
@@ -103,7 +103,7 @@ Questa pipeline elabora gli email dallo stato FAILED.
 ## Pipeline 5: InvalidCallbackPipeline (Callback Email con Payload Invalido)
 Questa pipeline elabora gli email dallo stato INVALID, convergendo nel flusso di errore analogo a FAILED.
 
-1. **Query**: Recupera fino a 25 email con stato "INVALID"
+1. **Query**: Recupera fino a `PIPELINE_BATCH_SIZE` email con stato "INVALID"
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "CALLING-INVALID-CALLBACK" (lock di elaborazione)
    - Prepara payload JSON con:
@@ -139,6 +139,7 @@ Nel file di configurazione:
 ```yaml
 pipeline:
   interval: 3
+  batch-size: 23
   restore:
     interval: 10
     timeout_minutes: 30

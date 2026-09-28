@@ -76,6 +76,17 @@ func TestGetMaxAttachmentsSize_CustomValue(t *testing.T) {
 	assert.Equal(t, 10000000, cfg.GetMaxAttachmentsSize())
 }
 
+func TestGetPipelineBatchSize(t *testing.T) {
+	yamlContent, err := getYamlContent("testdata/valid.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+
+	cfg, err := NewFromYamlContent(yamlContent)
+	assert.NoError(t, err)
+	assert.Equal(t, 23, cfg.GetPipelineBatchSize())
+}
+
 func TestExpandEnvVars(t *testing.T) {
 	randomString := fmt.Sprintf("ran%d", rand.Int())
 	t.Setenv("TEST_ENV_VAR", randomString)

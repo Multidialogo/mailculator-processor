@@ -27,6 +27,10 @@ func (cp *configProviderMock) GetPipelineInterval() int {
 	return 1
 }
 
+func (cp *configProviderMock) GetPipelineBatchSize() int {
+	return 23
+}
+
 func (cp *configProviderMock) GetRestorePipelineInterval() int {
 	return 5
 }

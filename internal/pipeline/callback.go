@@ -34,6 +34,7 @@ const defaultCallbackTimeout = 10 * time.Second
 type CallbackPipeline struct {
 	outbox             outboxService
 	cfg                CallbackConfig
+	batchSize          int
 	logger             *slog.Logger
 	startStatus        string
 	processingStatus   string
@@ -41,7 +42,7 @@ type CallbackPipeline struct {
 }
 
 func (p *CallbackPipeline) Process(ctx context.Context) {
-	callbackList, err := p.outbox.Query(ctx, p.startStatus, 25)
+	callbackList, err := p.outbox.Query(ctx, p.startStatus, p.batchSize)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error while querying emails to process: %v", err))
 		return
@@ -177,10 +178,11 @@ func sanitizeReason(reason string) string {
 	return internalErrorReason
 }
 
-func NewSentCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
+func NewSentCallbackPipeline(ob outboxService, cfg CallbackConfig, batchSize int) *CallbackPipeline {
 	return &CallbackPipeline{
 		outbox:             ob,
 		cfg:                cfg,
+		batchSize:          batchSize,
 		logger:             slog.With("pipe", "sent-callback"),
 		startStatus:        outbox.StatusSent,
 		processingStatus:   outbox.StatusCallingSentCallback,
@@ -188,10 +190,11 @@ func NewSentCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipe
 	}
 }
 
-func NewFailedCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
+func NewFailedCallbackPipeline(ob outboxService, cfg CallbackConfig, batchSize int) *CallbackPipeline {
 	return &CallbackPipeline{
 		outbox:             ob,
 		cfg:                cfg,
+		batchSize:          batchSize,
 		logger:             slog.With("pipe", "failed-callback"),
 		startStatus:        outbox.StatusFailed,
 		processingStatus:   outbox.StatusCallingFailedCallback,
@@ -199,10 +202,11 @@ func NewFailedCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPi
 	}
 }
 
-func NewInvalidCallbackPipeline(ob outboxService, cfg CallbackConfig) *CallbackPipeline {
+func NewInvalidCallbackPipeline(ob outboxService, cfg CallbackConfig, batchSize int) *CallbackPipeline {
 	return &CallbackPipeline{
 		outbox:             ob,
 		cfg:                cfg,
+		batchSize:          batchSize,
 		logger:             slog.With("pipe", "invalid-callback"),
 		startStatus:        outbox.StatusInvalid,
 		processingStatus:   outbox.StatusCallingInvalidCallback,

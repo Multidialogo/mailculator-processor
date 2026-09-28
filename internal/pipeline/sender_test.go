@@ -69,7 +69,7 @@ func TestSucceededSendEmails(t *testing.T) {
 	)
 	senderServiceMock := newSenderMock(nil)
 	buf, logger := mocks.NewLoggerMock()
-	sender := NewMainSenderPipeline(outboxServiceMock, senderServiceMock, "/base/path/")
+	sender := NewMainSenderPipeline(outboxServiceMock, senderServiceMock, "/base/path/", 23)
 	sender.logger = logger
 	sender.Process(context.TODO())
 	assert.Equal(t, 1, senderServiceMock.sendMethodCounter)

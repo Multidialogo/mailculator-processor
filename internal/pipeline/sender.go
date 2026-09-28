@@ -20,20 +20,22 @@ type MainSenderPipeline struct {
 	outbox              outboxService
 	client              clientService
 	attachmentsBasePath string
+	batchSize           int
 	logger              *slog.Logger
 }
 
-func NewMainSenderPipeline(outbox outboxService, client clientService, attachmentsBasePath string) *MainSenderPipeline {
+func NewMainSenderPipeline(outbox outboxService, client clientService, attachmentsBasePath string, batchSize int) *MainSenderPipeline {
 	return &MainSenderPipeline{
 		outbox:              outbox,
 		client:              client,
 		attachmentsBasePath: attachmentsBasePath,
+		batchSize:           batchSize,
 		logger:              slog.With("pipe", "main"),
 	}
 }
 
 func (p *MainSenderPipeline) Process(ctx context.Context) {
-	readyList, err := p.outbox.Query(ctx, outbox.StatusReady, 25)
+	readyList, err := p.outbox.Query(ctx, outbox.StatusReady, p.batchSize)
 	if err != nil {
 		p.logger.Error(fmt.Sprintf("error while querying emails to process: %v", err))
 		return

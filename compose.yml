@@ -17,6 +17,7 @@ services:
       SMTP_FROM: 'mailer@example.com'
       SMTP_ALLOW_INSECURE_TLS: 'true'
       PIPELINE_INTERVAL: '1'
+      PIPELINE_BATCH_SIZE: '23'
       PIPELINE_CALLBACK_URL: 'http://127.0.0.1:8080'
       ATTACHMENTS_BASE_PATH: 'testdata/attachments'
       MYSQL_HOST: '127.0.0.1'

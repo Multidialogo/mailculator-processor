@@ -310,6 +310,11 @@ class TaskDefinitionStack(Stack):
         )
 
         container.add_environment(
+            name='PIPELINE_BATCH_SIZE',
+            value='23'
+        )
+
+        container.add_environment(
             name='SMTP_HOST',
             value='email-smtp.eu-west-1.amazonaws.com'
         )

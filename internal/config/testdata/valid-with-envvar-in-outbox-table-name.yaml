@@ -19,6 +19,7 @@ mysql:
 
 pipeline:
   interval: 3
+  batch-size: 23
   restore:
     interval: 10
     timeout_minutes: 60

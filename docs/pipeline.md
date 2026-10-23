@@ -56,7 +56,8 @@ Questa pipeline elabora gli email dallo stato READY.
 2. **Elaborazione parallela**: Per ogni email trovato:
    - Aggiorna lo stato a "PROCESSING" (lock di elaborazione)
    - Legge il payload JSON e costruisce il messaggio MIME in memoria (`MessageBuilder`)
-   - Durante la costruzione MIME: scansiona `body_html` per `<img src="data:image/...;base64,...">`, decodifica ogni immagine, assegna un `Content-ID`, la include come parte **inline** in un `multipart/related`, e riscrive l'HTML con `src="cid:..."`; gli allegati file restano `Content-Disposition: attachment`
+   - Durante la costruzione MIME: scansiona `body_html` per `<img src="data:image/...;base64,...">`, decodifica ogni immagine, assegna un `Content-ID`, la include come parte **inline** in un `multipart/related`, e riscrive l'HTML con `src="cid:..."`; gli allegati file restano `Content-Disposition: attachment`. Il nome file è scritto tra virgolette con escape di `\` e `"` se è ASCII stampabile; se contiene accenti o caratteri di controllo usa la codifica RFC 2231 (`filename*=utf-8''...`), così da evitare nomi corrotti e injection di header
+   - Struttura MIME: header `MIME-Version: 1.0`; boundary distinti (RFC 2046 §5.1.1): `mixed-<id>` per il `multipart/mixed` e `related-<id>` per il `multipart/related` annidato (necessario perché alcuni provider, es. TIM, perdevano il nome degli allegati)
    - Tenta l'invio tramite client SMTP (net/smtp)
    - In caso di successo: aggiorna stato a "SENT"
    - In caso di fallimento: aggiorna stato a "FAILED" con motivo errore

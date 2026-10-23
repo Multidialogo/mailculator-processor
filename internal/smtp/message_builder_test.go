@@ -39,7 +39,9 @@ func TestBuildConvertsDataImagesToCIDInlineParts(t *testing.T) {
 
 	require.Contains(t, raw, "Content-Type: multipart/mixed;")
 	require.Contains(t, raw, "Content-Type: multipart/related;")
-	require.Contains(t, raw, "boundary=\""+emailID+"-related\"")
+	require.True(t, strings.HasPrefix(raw, "MIME-Version: 1.0\r\n"))
+	require.Contains(t, raw, "boundary=\"mixed-"+emailID+"\"")
+	require.Contains(t, raw, "boundary=\"related-"+emailID+"\"")
 
 	expectedCID := "inline-1-" + emailID + "@mailculator.local"
 	require.Contains(t, raw, "Content-ID: <"+expectedCID+">")
@@ -104,6 +106,46 @@ func TestBuildKeepsFileAttachmentsAsAttachmentDisposition(t *testing.T) {
 	require.Contains(t, raw, "Content-Disposition: inline; filename=\"inline-1.png\"")
 	require.Contains(t, raw, "Content-Disposition: attachment; filename=\"doc.txt\"")
 	require.True(t, strings.Count(raw, "Content-ID:") == 1)
+}
+
+func TestHeaderParam(t *testing.T) {
+	require.Equal(t, `filename="doc.pdf"`, headerParam("filename", "doc.pdf"))
+	require.Equal(t, `filename="my file.pdf"`, headerParam("filename", "my file.pdf"))
+	require.Equal(t, `filename="a\"b.pdf"`, headerParam("filename", `a"b.pdf`))
+	require.Equal(t, `filename="a\\b.pdf"`, headerParam("filename", `a\b.pdf`))
+
+	encoded := headerParam("filename", "contratto_è_più.pdf")
+	require.True(t, strings.HasPrefix(encoded, "filename*=utf-8''"), encoded)
+	require.Contains(t, encoded, "%C3%A8")
+	require.NotContains(t, encoded, "è")
+
+	injected := headerParam("filename","a.pdf\r\nBcc: sender@example.com")
+	require.NotContains(t, injected, "\r")
+	require.NotContains(t, injected, "\n")
+}
+
+func TestBuildEncodesNonASCIIAttachmentName(t *testing.T) {
+	dir := t.TempDir()
+	attachmentPath := filepath.Join(dir, "doc.txt")
+	require.NoError(t, os.WriteFile(attachmentPath, []byte("attachment-body"), 0o644))
+
+	builder := &MessageBuilder{}
+	msg, err := builder.Build(email.Payload{
+		Id:       "550e8400-e29b-41d4-a716-446655440000",
+		From:     "sender@example.com",
+		ReplyTo:  "sender@example.com",
+		To:       "recipient@example.com",
+		Subject:  "Non ASCII",
+		BodyText: "body",
+		Attachments: email.AttachmentList{
+			{Path: attachmentPath, Name: "contratto_è_più.pdf"},
+		},
+	}, "")
+	require.NoError(t, err)
+
+	raw := string(msg)
+	require.Contains(t, raw, "Content-Disposition: attachment; filename*=utf-8''contratto_%C3%A8_pi%C3%B9.pdf")
+	require.NotContains(t, raw, "è")
 }
 
 func TestExtractInlineImagesRejectsInvalidBase64(t *testing.T) {

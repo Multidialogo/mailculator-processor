@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
@@ -24,6 +25,37 @@ import (
 var dataImagePattern = regexp.MustCompile(`(?i)data:image/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)`)
 
 type MessageBuilder struct{}
+
+func mixedBoundaryFor(id string) string   { return "mixed-" + id }
+func relatedBoundaryFor(id string) string { return "related-" + id }
+
+func headerParam(key, value string) string {
+	printable := true
+	for _, r := range value {
+		if r < 0x20 || r > 0x7e {
+			printable = false
+			break
+		}
+	}
+
+	if printable {
+		escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value)
+		return fmt.Sprintf("%s=\"%s\"", key, escaped)
+	}
+
+	const prefix = "x; "
+	if formatted := mime.FormatMediaType("x", map[string]string{key: value}); strings.HasPrefix(formatted, prefix) {
+		return strings.TrimPrefix(formatted, prefix)
+	}
+
+	cleaned := strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7e || r == '"' || r == '\\' {
+			return '_'
+		}
+		return r
+	}, value)
+	return fmt.Sprintf("%s=\"%s\"", key, cleaned)
+}
 
 type inlineImage struct {
 	CID      string
@@ -47,7 +79,7 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 	msg := &mail.Message{}
 	b.addStandardHeadersToMessage(msg, payload)
 
-	orderedStandardHeaders := []string{"From", "Reply-To", "To", "Date", "Subject", "Content-Type"}
+	orderedStandardHeaders := []string{"MIME-Version", "From", "Reply-To", "To", "Date", "Subject", "Content-Type"}
 	var buf bytes.Buffer
 
 	for _, key := range orderedStandardHeaders {
@@ -76,8 +108,10 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 		return nil, fmt.Errorf("failed to write newline after custom headers: %w", err)
 	}
 
+	mixedBoundary := mixedBoundaryFor(payload.Id)
+
 	multipartWriter := multipart.NewWriter(&buf)
-	if err := multipartWriter.SetBoundary(payload.Id); err != nil {
+	if err := multipartWriter.SetBoundary(mixedBoundary); err != nil {
 		return nil, fmt.Errorf("failed to write multipart boundary: %w", err)
 	}
 
@@ -89,8 +123,7 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 
 	if htmlBody != "" {
 		if len(inlineImages) > 0 {
-			relatedBoundary := payload.Id + "-related"
-			if err := b.writeRelatedHTMLPart(&buf, payload.Id, relatedBoundary, htmlBody, inlineImages); err != nil {
+			if err := b.writeRelatedHTMLPart(&buf, mixedBoundary, relatedBoundaryFor(payload.Id), htmlBody, inlineImages); err != nil {
 				return nil, err
 			}
 		} else if err := b.writePart(multipartWriter, "text/html", "charset=utf-8", htmlBody); err != nil {
@@ -106,12 +139,12 @@ func (b *MessageBuilder) Build(payload email.Payload, attachmentsBasePath string
 			return nil, fmt.Errorf("failed to read attachment: %w", err)
 		}
 
-		if err = b.writeAttachmentWithName(&buf, payload.Id, fullPath, attachment.Name, attachmentData); err != nil {
+		if err = b.writeAttachmentWithName(&buf, mixedBoundary, fullPath, attachment.Name, attachmentData); err != nil {
 			return nil, err
 		}
 	}
 
-	if _, err := buf.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", payload.Id))); err != nil {
+	if _, err := buf.Write([]byte(fmt.Sprintf("\r\n--%s--\r\n", mixedBoundary))); err != nil {
 		return nil, fmt.Errorf("failed to write final boundary: %w", err)
 	}
 
@@ -286,6 +319,7 @@ func (b *MessageBuilder) writeInlineAttachment(target io.Writer, boundary string
 
 func (b *MessageBuilder) addStandardHeadersToMessage(msg *mail.Message, data email.Payload) {
 	msg.Header = make(mail.Header)
+	msg.Header["MIME-Version"] = []string{"1.0"}
 	msg.Header["From"] = []string{data.From}
 
 	if data.ReplyTo != data.From {
@@ -295,7 +329,7 @@ func (b *MessageBuilder) addStandardHeadersToMessage(msg *mail.Message, data ema
 	msg.Header["To"] = []string{data.To}
 	msg.Header["Date"] = []string{time.Now().Format(time.RFC1123Z)}
 	msg.Header["Subject"] = []string{data.Subject}
-	msg.Header["Content-Type"] = []string{fmt.Sprintf("multipart/mixed; boundary=\"%s\"", data.Id)}
+	msg.Header["Content-Type"] = []string{fmt.Sprintf("multipart/mixed; boundary=\"%s\"", mixedBoundaryFor(data.Id))}
 
 	for key, value := range data.CustomHeaders {
 		msg.Header[key] = []string{value}
@@ -415,7 +449,7 @@ func (b *MessageBuilder) writeAttachmentWithName(target io.Writer, boundary stri
 		return fmt.Errorf("failed to write boundary: %w", err)
 	}
 
-	contentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", name)
+	contentDisposition := "attachment; " + headerParam("filename", name)
 	if err := b.writeFoldedHeader(target, "Content-Disposition", contentDisposition); err != nil {
 		return fmt.Errorf("failed to write Content-Disposition header: %w", err)
 	}

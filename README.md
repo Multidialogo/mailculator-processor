@@ -59,4 +59,5 @@ open ".coverage/report.html"
 Il progetto utilizza CDK per il deployment su AWS ECS Fargate con:
 - MySQL 8.4 (RDS) in stage e MariaDB (RDS) in produzione per lo storage dei metadati
 - EFS per i file email
+- Fuso orario: in stage il container usa `TZ=Europe/Paris`, in produzione resta UTC (default)
 - CloudWatch e Datadog per il monitoring

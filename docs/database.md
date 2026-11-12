@@ -84,6 +84,8 @@ FOR UPDATE SKIP LOCKED
 ### Compatibilità MySQL 8.4 e MariaDB
 Solo l'ambiente di stage usa MySQL 8.4 (RDS); produzione resta su MariaDB, quindi il codice deve restare compatibile con entrambi. In locale `compose.yml` usa l'immagine `mysql:8.4`, quindi i test di integrazione non coprono MariaDB. Il codice non usa `mysql_native_password`, disabilitato di default in 8.4: il driver gestisce `caching_sha2_password`. In stage si usa `mysql_native_password`, quindi il plugin deve essere abilitato sull'istanza (in 8.4 con `mysql_native_password=ON`). Il driver `github.com/go-sql-driver/mysql` è lo stesso per MySQL e MariaDB, quindi non richiede modifiche. Le query e le migrazioni non usano costrutti esclusivi di MariaDB. `FOR UPDATE SKIP LOCKED` richiede MySQL 8.0.1+.
 
+**Fuso orario**: in stage il container applicativo gira con `TZ=Europe/Paris` (impostato in `cdk/task_definition_stack.py`; l'immagine Docker include `tzdata`), in produzione resta UTC.
+
 La connessione è configurata tramite le variabili `MYSQL_HOST` (endpoint), `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (nome dello schema) e `MYSQL_TLS`. In AWS i primi cinque valori sono letti dai campi `host`, `port`, `username`, `password` e `dbname` del secret Secrets Manager indicato in `cdk/task_definition_stack.py`.
 
 ### Transazioni

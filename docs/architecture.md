@@ -34,7 +34,7 @@ Il Mailculator Processor è un'applicazione scritta in Go che elabora email attr
 - **Task Definition**: Definita tramite CDK con container principale e Datadog sidecar
 
 ### Storage
-- **MySQL (RDS/MariaDB)**: Database principale per metadati degli email
+- **MySQL 8.4 (RDS) in stage, MariaDB (RDS) in produzione**: Database principale per metadati degli email
 - **EFS**: Storage per payload e allegati (filesystem condiviso)
 
 ### Networking & Security

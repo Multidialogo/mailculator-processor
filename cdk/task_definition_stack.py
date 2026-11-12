@@ -289,6 +289,12 @@ class TaskDefinitionStack(Stack):
             value='true'
         )
 
+        if selected_environment == 'stage':
+            container.add_environment(
+                name='TZ',
+                value='Europe/Paris'
+            )
+
         container.add_environment(
             name='ATTACHMENTS_BASE_PATH',
             value=md_rest_efs_folder_name

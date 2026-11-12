@@ -167,8 +167,8 @@ func (f *MySQLOutboxFacade) GetEmailStatus(ctx context.Context, id string) (stri
 	return status, err
 }
 
-// WaitForReady waits for MariaDB to be ready by checking for the zz-finish marker file
-// This is used in tests to wait for MariaDB initialization to complete
+// WaitForMySQLReady waits for the MySQL test database to accept connections.
+// This is used in tests to wait for the database initialization to complete.
 func WaitForMySQLReady(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 

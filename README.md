@@ -57,6 +57,6 @@ open ".coverage/report.html"
 ## 🏗️ Costruzione e Deployment
 
 Il progetto utilizza CDK per il deployment su AWS ECS Fargate con:
-- MySQL (RDS/MariaDB) per lo storage dei metadati
+- MySQL 8.4 (RDS) in stage e MariaDB (RDS) in produzione per lo storage dei metadati
 - EFS per i file email
 - CloudWatch e Datadog per il monitoring

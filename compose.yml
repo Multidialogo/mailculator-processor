@@ -71,10 +71,10 @@ services:
   mysql: &mysql-base
     profiles:
       - 'none'
-    image: mariadb:10.11
+    image: mysql:8.4
     environment:
-      MARIADB_ROOT_PASSWORD: 'test'
-      MARIADB_DATABASE: 'mailculator_test'
+      MYSQL_ROOT_PASSWORD: 'test'
+      MYSQL_DATABASE: 'mailculator_test'
     volumes:
       - './docker/mysql/migrations:/docker-entrypoint-initdb.d/migrations:ro'
       - './docker/mysql/init.sh:/docker-entrypoint-initdb.d/zzz-init.sh:ro'

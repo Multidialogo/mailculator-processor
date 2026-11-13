@@ -98,6 +98,14 @@ func errorReason(err error) string {
 	if errors.As(err, &r) {
 		return r.Reason()
 	}
+	return errorText(err)
+}
+
+func errorText(err error) string {
+	var smtpErr *textproto.Error
+	if errors.As(err, &smtpErr) {
+		return fmt.Sprintf("%d %s", smtpErr.Code, smtpErr.Msg)
+	}
 	return err.Error()
 }
 

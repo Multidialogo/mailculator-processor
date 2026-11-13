@@ -62,6 +62,8 @@ type MySQLConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Database string `yaml:"database"`
+	// SessionUTC forces the MySQL session time zone to UTC (enabled in stage only).
+	SessionUTC bool `yaml:"session_utc"`
 }
 
 type Config struct {
@@ -165,6 +167,10 @@ func (c *Config) GetMySQLDSN() string {
 	if cfg.Host == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
+	if cfg.SessionUTC {
+		dsn += "&loc=UTC&time_zone=%27%2B00%3A00%27"
+	}
+	return dsn
 }

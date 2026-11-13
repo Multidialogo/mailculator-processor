@@ -42,7 +42,7 @@ func NewMySQLConfigFromEnv() string {
 		tls = "true"
 	}
 
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&tls=%s", user, password, host, port, database, tls)
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=UTC&time_zone=%%27%%2B00%%3A00%%27&tls=%s", user, password, host, port, database, tls)
 }
 
 func NewMySQLOutboxFacade() (*MySQLOutboxFacade, error) {

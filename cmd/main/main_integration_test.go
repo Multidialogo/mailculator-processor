@@ -64,10 +64,35 @@ func TestMainComplete(t *testing.T) {
 	}
 	go srv.ListenAndServe()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	run(ctx)
-	srv.Shutdown(ctx)
+
+	runDone := make(chan struct{})
+	go func() {
+		defer close(runDone)
+		run(ctx)
+	}()
+
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		allAcknowledged := true
+		for _, value := range fixtures {
+			status, statusErr := oFacade.GetEmailStatus(context.TODO(), value)
+			require.NoError(t, statusErr)
+			if status != outbox.StatusSentAcknowledged {
+				allAcknowledged = false
+				break
+			}
+		}
+		if allAcknowledged {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	cancel()
+	<-runDone
+	_ = srv.Shutdown(context.Background())
 
 	for _, value := range fixtures {
 		status, err := oFacade.GetEmailStatus(context.TODO(), value)

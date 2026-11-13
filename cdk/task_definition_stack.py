@@ -294,6 +294,10 @@ class TaskDefinitionStack(Stack):
                 name='TZ',
                 value='Europe/Paris'
             )
+            container.add_environment(
+                name='MYSQL_SESSION_UTC',
+                value='true'
+            )
 
         container.add_environment(
             name='ATTACHMENTS_BASE_PATH',

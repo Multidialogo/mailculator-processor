@@ -87,6 +87,27 @@ func TestGetPipelineBatchSize(t *testing.T) {
 	assert.Equal(t, 23, cfg.GetPipelineBatchSize())
 }
 
+func TestGetMySQLDSN(t *testing.T) {
+	t.Parallel()
+
+	mysqlConfig := MySQLConfig{Host: "db", Port: 3306, User: "u", Password: "p", Database: "d"}
+
+	t.Run("Default DSN is unchanged (production)", func(t *testing.T) {
+		cfg := &Config{MySQL: mysqlConfig}
+		assert.Equal(t, "u:p@tcp(db:3306)/d?parseTime=true", cfg.GetMySQLDSN())
+	})
+
+	t.Run("Session UTC enabled (stage)", func(t *testing.T) {
+		mysqlConfig.SessionUTC = true
+		cfg := &Config{MySQL: mysqlConfig}
+		assert.Equal(t, "u:p@tcp(db:3306)/d?parseTime=true&loc=UTC&time_zone=%27%2B00%3A00%27", cfg.GetMySQLDSN())
+	})
+
+	t.Run("Empty host returns empty DSN", func(t *testing.T) {
+		assert.Equal(t, "", (&Config{}).GetMySQLDSN())
+	})
+}
+
 func TestExpandEnvVars(t *testing.T) {
 	randomString := fmt.Sprintf("ran%d", rand.Int())
 	t.Setenv("TEST_ENV_VAR", randomString)

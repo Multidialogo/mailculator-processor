@@ -11,6 +11,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from multidialogo_cdk_shared.environment_secrets_resolver import EnvironmentSecretsResolver
+from netbuilder_cdk_shared.core.constructs.secret import create_secret
 
 MD_REST_VOLUME_NAME = 'rest-volume'
 MC_VOLUME_NAME = 'mc-volume'
@@ -358,11 +359,27 @@ class TaskDefinitionStack(Stack):
             value=ses_smtp_credentials_secret_name
         )
 
+        db_secret_name = environment_secrets_resolver.rds_instances_multicarrier_credentials_admin_secret_name
+
         db_secret = secretsmanager.Secret.from_secret_name_v2(
             scope=self,
             id='db-secret',
-            secret_name=environment_secrets_resolver.rds_instances_multicarrier_credentials_admin_secret_name
+            secret_name=db_secret_name
         )
+
+        if selected_environment == 'stage':
+            # ATTENZIONE: NON MODIFICARE NULLA in questa creazione del secret (id, nome, campi, removal policy):
+            # una modifica puo' causare la sostituzione/ricreazione del secret e la perdita dei valori
+            # compilati a mano dopo il deploy.
+            created_db_secret = create_secret(
+                self, 'db-secret-creation',
+                secret_name=db_secret_name,
+                json_keys=['host', 'port', 'username', 'password', 'dbname', 'dbClusterIdentifier'],
+                description='Credenziali del database MySQL di multicarrier-email.',
+            )
+            db_secret.node.add_dependency(created_db_secret)
+            task_definition.node.add_dependency(created_db_secret)
+
         db_secret.grant_read(task_execution_role)
 
         container.add_secret(

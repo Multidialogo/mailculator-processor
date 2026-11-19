@@ -86,7 +86,7 @@ Solo l'ambiente di stage usa MySQL 8.4 (RDS); produzione resta su MariaDB, quind
 
 **Fuso orario**: in stage il container applicativo gira con `TZ=Europe/Paris` (impostato in `cdk/task_definition_stack.py`; l'immagine Docker include `tzdata`), in produzione resta UTC.
 
-La connessione è configurata tramite le variabili `MYSQL_HOST` (endpoint), `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (nome dello schema) e `MYSQL_TLS`. In AWS i primi cinque valori sono letti dai campi `host`, `port`, `username`, `password` e `dbname` del secret Secrets Manager indicato in `cdk/task_definition_stack.py`.
+La connessione è configurata tramite le variabili `MYSQL_HOST` (endpoint), `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (nome dello schema) e `MYSQL_TLS`. In AWS i primi cinque valori sono letti dai campi `host`, `port`, `username`, `password` e `dbname` del secret Secrets Manager indicato in `cdk/task_definition_stack.py`. Solo in stage il secret viene creato dallo stack (tramite `create_secret` di `netbuilder_cdk_shared`, con i campi `host`, `port`, `username`, `password`, `dbname` e `dbClusterIdentifier`, da compilare a mano dopo il deploy) e poi importato per nome; negli altri ambienti viene solo importato. `dbClusterIdentifier` non è esposto come variabile d'ambiente.
 
 ### Transazioni
 Le operazioni di update e insert history sono eseguite in transazione per garantire atomicità:
